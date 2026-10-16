@@ -35,6 +35,44 @@ class ActionType(str, Enum):
     REVOKE_USER = "REVOKE_USER"
     RESET_PASSWORD = "RESET_PASSWORD"
     PATCH_SYSTEM = "PATCH_SYSTEM"
+    WAZUH_ACTIVE_RESPONSE = "WAZUH_ACTIVE_RESPONSE"
+
+
+# =====================================================================
+# 0. SCHEMAS CHO WAZUH SIEM INTEGRATION
+# =====================================================================
+class WazuhMitreInfo(BaseModel):
+    """Thông tin MITRE ATT&CK trích xuất từ Wazuh Rule."""
+    id: List[str] = Field(default_factory=list, description="Danh sách mã kỹ thuật (Txxxx)")
+    tactic: List[str] = Field(default_factory=list, description="Danh sách chiến thuật")
+    technique: List[str] = Field(default_factory=list, description="Danh sách tên kỹ thuật")
+
+
+class WazuhRuleInfo(BaseModel):
+    """Cấu trúc Rule của cảnh báo Wazuh."""
+    id: str = Field(..., description="ID của luật phát hiện Wazuh")
+    level: int = Field(..., ge=0, le=15, description="Mức độ nghiêm trọng của Rule (0-15)")
+    description: str = Field(..., description="Mô tả luật")
+    groups: List[str] = Field(default_factory=list, description="Nhóm phân loại luật (windows, sysmon, web, etc.)")
+    mitre: Optional[WazuhMitreInfo] = None
+
+
+class WazuhAgentInfo(BaseModel):
+    """Thông tin máy trạm (Agent) ghi nhận cảnh báo trên Wazuh."""
+    id: str = Field(..., description="ID Agent trong Wazuh")
+    name: str = Field(..., description="Tên định danh máy trạm")
+    ip: Optional[str] = Field(None, description="Địa chỉ IP của Agent")
+
+
+class WazuhAlert(BaseModel):
+    """Mô hình dữ liệu cảnh báo hoàn chỉnh từ Wazuh SIEM."""
+    id: str = Field(..., description="Mã định danh duy nhất của cảnh báo Wazuh")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    rule: WazuhRuleInfo = Field(..., description="Thông tin luật bị kích hoạt")
+    agent: WazuhAgentInfo = Field(..., description="Thông tin Agent nguồn")
+    full_log: Optional[str] = Field(None, description="Dòng log thô ban đầu")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Dữ liệu chi tiết đã giải mã (Win/Sysmon/Zeek)")
+
 
 
 # =====================================================================

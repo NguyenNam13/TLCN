@@ -91,3 +91,12 @@ class LogParserTool:
                 "TargetDomainName": data.get("TargetDomainName")
             }
         )
+
+    @staticmethod
+    def parse_wazuh_alert(raw_payload: str) -> ParsedEvent:
+        """Phân tích cảnh báo từ Wazuh SIEM (JSON string hoặc dict)."""
+        from src.tools.wazuh_client import WazuhClientTool
+        data = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
+        alert = WazuhClientTool.parse_alert_dict(data)
+        return WazuhClientTool.convert_to_parsed_event(alert)
+

@@ -25,9 +25,9 @@ TRIAGE_AGENT_SYSTEM_PROMPT = """Bạn là Detection & Triage Agent, đóng vai t
 Nhiệm vụ của bạn là thẩm định sự kiện đã bóc tách (`parsed_events`), đánh giá mức độ bất thường và quyết định xem đây có phải là một sự cố an ninh thực sự (True Positive) hay chỉ là dương tính giả / hoạt động thường nhật (False Positive).
 
 QUY TRÌNH SUY LUẬN CHAIN-OF-THOUGHT (CoT):
-Bước 1: Quan sát (Observation) - Liệt kê các hành vi đáng ngờ: tiến trình lạ, tham số thực thi bypass, kết nối IP nước ngoài, truy vấn cổng nhạy cảm.
+Bước 1: Quan sát (Observation) - Liệt kê các hành vi đáng ngờ: tiến trình lạ, tham số thực thi bypass, kết nối IP nước ngoài, truy vấn cổng nhạy cảm. Nếu nguồn sự kiện từ Wazuh SIEM, kiểm tra `wazuh_rule_level` (0-15) và `wazuh_rule_description`.
 Bước 2: Phân tích bối cảnh (Contextualization) - Đây có phải công cụ quản trị hệ thống hợp lệ không? Thời gian thực thi có bất thường không?
-Bước 3: Đánh giá rủi ro (Risk Scoring) - Chấm điểm rủi ro từ 0 đến 100 và quy về mức độ: LOW, MEDIUM, HIGH, CRITICAL.
+Bước 3: Đánh giá rủi ro (Risk Scoring) - Chấm điểm rủi ro từ 0 đến 100 và quy về mức độ: LOW, MEDIUM, HIGH, CRITICAL. Nếu `wazuh_rule_level` >= 10, mặc định rủi ro ở mức HIGH hoặc CRITICAL trừ khi phát hiện dấu hiệu rõ ràng của False Positive.
 Bước 4: Kết luận (Conclusion) - Gán cờ `is_incident` (True/False) kèm độ tin cậy `confidence_score` (0.0 - 1.0).
 
 ĐỊNH DẠNG ĐẦU RA ÉP BUỘC (JSON):
@@ -81,7 +81,8 @@ CÁC NGUYÊN TẮC HÀNH ĐỘNG:
    - BLOCK_IP: Chặn IP máy chủ C2 trên tường lửa biên.
    - KILL_PROCESS: Tiêu diệt tiến trình mã độc đang chạy theo PID/Name.
    - REVOKE_USER / RESET_PASSWORD: Khóa hoặc đặt lại mật khẩu tài khoản bị đánh cắp.
-3. Bắt buộc kích hoạt cờ `require_human_approval = True` cho các hành động có mức độ ảnh hưởng lớn (cô lập host, chặn IP toàn mạng) để chuyên viên SOC kiểm tra trước khi thực thi.
+   - WAZUH_ACTIVE_RESPONSE: Kích hoạt trực tiếp script phản ứng trên Wazuh Agent (ví dụ: `firewall-drop` hoặc `host-isolate`).
+3. Bắt buộc kích hoạt cờ `require_human_approval = True` cho các hành động có mức độ ảnh hưởng lớn (cô lập host, chặn IP toàn mạng, kích hoạt active response) để chuyên viên SOC kiểm tra trước khi thực thi.
 4. Xuất danh sách theo đúng định dạng `List[RecommendedAction]`.
 """
 

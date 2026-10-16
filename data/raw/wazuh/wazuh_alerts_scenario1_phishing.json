@@ -1,0 +1,49 @@
+[
+  {
+    "timestamp": "2026-10-15T08:22:15.000+0000",
+    "rule": {
+      "level": 10,
+      "description": "Windows logon success from unusual external IP address",
+      "id": "60106",
+      "mitre": {
+        "id": [
+          "T1078.002"
+        ],
+        "tactic": [
+          "Initial Access",
+          "Defense Evasion"
+        ],
+        "technique": [
+          "Valid Accounts: Domain Accounts"
+        ]
+      },
+      "groups": [
+        "windows",
+        "authentication_success"
+      ]
+    },
+    "agent": {
+      "id": "002",
+      "name": "WIN10-VICTIM-01",
+      "ip": "192.168.1.105"
+    },
+    "id": "1760516535.1001",
+    "full_log": "Event 4624: An account was successfully logged on",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "4624",
+          "computer": "WIN10-VICTIM-01"
+        },
+        "eventdata": {
+          "targetUserName": "hoainam",
+          "targetDomainName": "HCMUTE",
+          "logonType": "3",
+          "ipAddress": "185.220.101.5",
+          "ipPort": "49812",
+          "authenticationPackageName": "NTLM"
+        }
+      }
+    }
+  }
+]

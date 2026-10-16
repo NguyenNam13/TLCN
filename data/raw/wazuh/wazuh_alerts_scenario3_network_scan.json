@@ -1,0 +1,47 @@
+[
+  {
+    "timestamp": "2026-10-15T10:05:00.000+0000",
+    "rule": {
+      "level": 8,
+      "description": "Network Port Scanning activity detected - multiple SYN packets sent to closed ports",
+      "id": "5710",
+      "mitre": {
+        "id": [
+          "T1046"
+        ],
+        "tactic": [
+          "Discovery"
+        ],
+        "technique": [
+          "Network Service Discovery"
+        ]
+      },
+      "groups": [
+        "firewall",
+        "network_scan",
+        "ids"
+      ]
+    },
+    "agent": {
+      "id": "001",
+      "name": "PFSENSE-GATEWAY",
+      "ip": "192.168.1.1"
+    },
+    "id": "1760522700.3001",
+    "full_log": "Firewall block: multiple SYN dropped from 192.168.1.200 to 192.168.1.105 ports 445, 3389, 22",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "NetScan-01",
+          "computer": "PFSENSE-GATEWAY"
+        },
+        "eventdata": {
+          "sourceIp": "192.168.1.200",
+          "destinationIp": "192.168.1.105",
+          "destinationPort": "445",
+          "protocol": "tcp"
+        }
+      }
+    }
+  }
+]
