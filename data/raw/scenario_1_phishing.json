@@ -1,0 +1,14 @@
+{
+  "scenario_id": "SCENARIO-01-PHISHING",
+  "title": "Phishing Email dẫn đến Credential Harvesting & Initial Access",
+  "logs": [
+    {
+      "log_source": "MailGateway",
+      "raw_payload": "{\"event_time\": \"2026-10-15T08:14:22Z\", \"sender\": \"admin-security-alert@micros0ft-support.com\", \"recipient\": \"hoainam@hcmute.edu.vn\", \"subject\": \"C\\u1ea3nh b\\u00e1o kh\\u1ea9n c\\u1ea5p: X\\u00e1c minh t\\u00e0i kho\\u1ea3n Office 365\", \"attachment\": \"Security_Patch.pdf\", \"extracted_url\": \"http://login-microsoft365-verify.com/login.php\", \"action_taken\": \"DELIVERED\"}"
+    },
+    {
+      "log_source": "WindowsSecurity",
+      "raw_payload": "{\"EventID\": 4624, \"TimeGenerated\": \"2026-10-15T08:22:15Z\", \"TargetUserName\": \"hoainam\", \"TargetDomainName\": \"HCMUTE\", \"LogonType\": 3, \"IpAddress\": \"185.220.101.5\", \"IpPort\": 49812, \"WorkstationName\": \"UNKNOWN\", \"AuthenticationPackage\": \"NTLM\"}"
+    }
+  ]
+}

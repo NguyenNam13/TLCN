@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Datasets & large dumps (optional local caches)
+data/cache/
+*.log
+
+# ChromaDB local state
+chroma_db/
+.chroma/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Word temporary lock files
+.~*
+~$*
