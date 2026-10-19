@@ -99,7 +99,29 @@ TLCN/
 
 ---
 
-## 🚀 5. Hướng dẫn Cài đặt & Chạy Thử nghiệm
+## 📅 5. Kế hoạch và Bảng Phân công Nhiệm vụ (13 Tuần)
+
+Hệ thống được triển khai theo lộ trình 13 tuần đã được chuẩn hóa tích hợp cùng **Wazuh SIEM** và **Môi trường Giả lập EVE-NG**:
+
+| Tuần | Thời gian | Hạng mục công việc trọng tâm | Phân công chi tiết | Sản phẩm bàn giao (Deliverable) |
+| :---: | :---: | :--- | :--- | :--- |
+| **1** | 20/09 - 26/09 | Tiếp thu góp ý GVHD, chốt đề cương chi tiết | **Cả nhóm** (Nam: chuẩn hóa format tài liệu; Đô: rà soát mục tiêu kỹ thuật) | Đề cương chi tiết hoàn chỉnh |
+| **2** | 27/09 - 03/10 | Nghiên cứu nền tảng & Tổng quan | • **Nam:** Quy trình NIST SP 800-61, format log (Sysmon, Zeek, EVTX)<br>• **Đô:** LLM, Prompt Engineering, Structured Output, Tool Calling | Bản thảo Báo cáo Chương 1 (Phần 1) |
+| **3** | 04/10 - 10/10 | Nghiên cứu Agent & Tri thức an ninh | • **Nam:** Threat Intelligence, MITRE ATT&CK (STIX/TAXII)<br>• **Đô:** Kiến trúc LangGraph, State Management, Agent Orchestration | Bản thảo Báo cáo Chương 1 (Phần 2 & Khung Chương 2) |
+| **4** | 11/10 - 17/10 | Đặc tả yêu cầu & Kiến trúc hệ thống | • **Cả nhóm:** Xác định 3 kịch bản sự cố & Luồng dữ liệu chung<br>• **Đô:** Thiết kế kiến trúc StateGraph điều phối<br>• **Nam:** Thiết kế Schema Input/Output chuẩn (Pydantic v2) | Tài liệu System Architecture & Sequence Diagram |
+| **5** | 18/10 - 24/10 | Thiết kế chi tiết từng Agent & Tích hợp Wazuh (Làm song song) | • **Nam:** Thiết kế Ingestion Agent (kết nối Wazuh), Triage Agent (Wazuh Rule Level), Threat Intel Agent<br>• **Đô:** Thiết kế RCA Agent, Response Agent (Wazuh Active Response), Reporting Agent | Bản đặc tả chi tiết Prompts, Schemas (WazuhAlert), Tools |
+| **6** | 25/10 - 31/10 | Dựng Lab EVE-NG, Hạ tầng Wazuh & Cơ sở tri thức RAG | • **Nam:** Thiết lập Topology EVE-NG (Firewall, Kali, Win10 Sysmon, Wazuh Server), xuất dataset alert thực tế<br>• **Đô:** Xây dựng Vector DB/ChromaDB lưu trữ MITRE ATT&CK Matrix & Wazuh Ruleset | Hạ tầng Lab EVE-NG + Bộ dataset Wazuh alert thực tế + RAG Knowledge base sẵn sàng |
+| **7** | 01/11 - 07/11 | Hiện thực hóa Framework & Cụm Agent đầu vào | • **Đô:** Dựng khung LangGraph StateGraph, luồng chuyển trạng thái<br>• **Nam:** Code Wazuh Ingestion Tool (API & File stream) & Detection/Triage Agent | Khung điều phối + Ingestion Agent tiếp nhận cảnh báo Wazuh chạy độc lập |
+| **8** | 08/11 - 14/11 | Hiện thực hóa Cụm Agent Chuyên sâu | • **Nam:** Code Threat Intel Agent (tích hợp API VirusTotal, AbuseIPDB)<br>• **Đô:** Code RCA Agent (bóc tách tiến trình Sysmon từ Wazuh Alert, suy luận attack path) | 2 Agent chuyên sâu vượt qua Unit Test |
+| **9** | 15/11 - 21/11 | Hiện thực Cụm Đề xuất/Báo cáo & TÍCH HỢP ĐỢT 1 | • **Đô:** Code Response Agent (tích hợp Wazuh Active Response API) & Reporting Agent<br>• **Nam:** Ráp cụm Ingestion-Triage-ThreatIntel vào LangGraph | Prototype v0.1: Chạy luồng từ Wazuh Alert → Phân tích đe dọa & Đề xuất phản ứng |
+| **10** | 22/11 - 28/11 | Tích hợp hoàn chỉnh & Dashboard UI | • **Đô:** Tích hợp RCA + Response + Report vào LangGraph, cơ chế HITL duyệt hành động<br>• **Nam:** Xây dựng Dashboard UI bằng Streamlit hiển thị đồng thời Wazuh alerts & Agent graph | Prototype v1.0: Hoàn chỉnh toàn bộ luồng End-to-End có UI tương tác |
+| **11** | 29/11 - 05/12 | Thử nghiệm hệ thống trên 3 kịch bản EVE-NG | • **Nam:** Thực thi kịch bản Phishing & Scanning từ Kali EVE-NG, đo False Positive/Negative<br>• **Đô:** Thực thi kịch bản Malware trên Windows 10 EVE-NG, đo thời gian điều tra (MTTI) | Bộ số liệu thực nghiệm đầy đủ trên môi trường mạng EVE-NG |
+| **12** | 06/12 - 12/12 | Đánh giá so sánh Baseline & Hoàn thiện báo cáo | • **Cả nhóm:** Chạy so sánh Multi-Agent với Single-Agent LLM và Wazuh Rule-based truyền thống<br>• **Nam:** Viết Chương 4 (Triển khai hệ thống EVE-NG, Wazuh & Agent)<br>• **Đô:** Viết Chương 5 (Kết quả thực nghiệm & Đánh giá) | Bản thảo toàn văn Báo cáo (Chương 1 đến 5) |
+| **13** | 13/12 - 14/12 | Chuẩn bị bảo vệ & Đóng gói sản phẩm | • **Nam:** Dựng video demo kịch bản tấn công EVE-NG, thiết kế Slide báo cáo<br>• **Đô:** Kiểm tra mã nguồn, in ấn quyển báo cáo, tổng duyệt thuyết trình | Quyển báo cáo in nộp + Slide + Demo EVE-NG hoàn chỉnh |
+
+---
+
+## 🚀 6. Hướng dẫn Cài đặt & Chạy Thử nghiệm
 
 ### Yêu cầu hệ thống:
 * Python 3.10 trở lên
@@ -117,10 +139,10 @@ python3 -m unittest discover tests
 
 ---
 
-## 📄 6. Tài liệu Báo cáo & Đề cương
+## 📄 7. Tài liệu Báo cáo & Đề cương
 Toàn bộ các bản thảo báo cáo, đề cương chi tiết đã được lưu trữ tập trung tại thư mục:  
 📁 `/home/nam/Desktop/TLCN-NAM/BC/`
-* `Bao_Cao_Thuc_Hien_Nhiem_Vu_Tuan_2_3_4.docx`
-* `Bao_Cao_Thiet_Ke_Chi_Tiet_Tuan_5.docx`
-* `DC-03-Phan Trường Đô-Nguyễn Phạm Hoài Nam.docx`
-* `Text Document.docx`
+* `Bao_Cao_Thuc_Hien_Nhiem_Vu_Tuan_2_3_4.docx`: Báo cáo nghiệm thu giai đoạn Tuần 2, 3, 4.
+* `Bao_Cao_Thiet_Ke_Chi_Tiet_Tuan_5.docx`: Đặc tả chi tiết Prompts, Schemas (WazuhAlert) và Tools của 6 Agent.
+* `DC-03-Phan Trường Đô-Nguyễn Phạm Hoài Nam.docx`: Đề cương chi tiết đã duyệt với GVHD.
+* `CongViecChinh.docx`: Bảng kế hoạch tiến độ 13 tuần tích hợp Wazuh & EVE-NG.
