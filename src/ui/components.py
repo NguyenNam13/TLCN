@@ -614,7 +614,7 @@ def format_ioc_table_data(threat_intel: Optional[ThreatIntelEnrichment]) -> List
 
         score = ioc.reputation_score if ioc.reputation_score is not None else 0
         if score >= 80 or ioc.is_malicious:
-            assessment = "🚨 Nguy cấp (Critical)"
+            assessment = "🚨 Độc hại nguy cấp (Critical)"
         elif score >= 50:
             assessment = "🟠 Độc hại (Suspicious)"
         elif score > 0:
@@ -622,10 +622,14 @@ def format_ioc_table_data(threat_intel: Optional[ThreatIntelEnrichment]) -> List
         else:
             assessment = "🟢 Đã thẩm định (Benign)"
 
+        display_type = "IPv4" if ioc_type == "IPV4" else ("IPv6" if ioc_type == "IPV6" else ioc_type)
+
         rows.append({
-            "Loại IoC": ioc_type,
+            "Loại IoC": display_type,
             "Giá trị Chỉ số": val,
+            "Điểm Độc hại": score,
             "Điểm Nguy cơ": score,
+            "Đánh giá": assessment,
             "Đánh giá CTI": assessment,
             "Nhóm Tấn công": ioc.threat_actor or "Chưa định danh",
             "Nguồn Thẩm định": str(ioc.details.get("source", ioc.details.get("verdict", "VirusTotal & OTX"))),
