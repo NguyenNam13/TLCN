@@ -1,219 +1,152 @@
 # XÂY DỰNG HỆ THỐNG MULTI-AGENT ỨNG DỤNG LLM HỖ TRỢ ĐIỀU TRA SỰ CỐ AN NINH MẠNG
-## (AUTONOMOUS MULTI-AGENT CYBERSECURITY INCIDENT INVESTIGATION & RESPONSE SYSTEM)
 
-> **Trường:** Đại học Sư phạm Kỹ thuật TP. Hồ Chí Minh (HCMUTE)  
-> **Khoa:** Công nghệ Thông tin – **Bộ môn:** An toàn Thông tin  
-> **Đề tài:** Khóa luận Tốt nghiệp / Tiểu luận Chuyên ngành An toàn Thông tin  
+> **Đề tài:** Tiểu luận chuyên ngành An toàn thông tin  
+> **Khoa:** Công nghệ Thông tin – Trường Đại học Sư phạm Kỹ thuật TP.HCM (HCMUTE)  
 > **Sinh viên thực hiện:**  
-> - **Nguyễn Phạm Hoài Nam** – MSSV: 23162059  
 > - **Phan Trường Đô** – MSSV: 23162020  
+> - **Nguyễn Phạm Hoài Nam** – MSSV: 23162059  
 > **Giảng viên hướng dẫn:** ThS. Đinh Công Đoan  
 > **Thời gian thực hiện:** 20/09/2026 – 14/12/2026  
-> **Trạng thái:** ✅ **Hoàn thiện 100% – Sẵn sàng Báo cáo & Nghiệm thu** (198/198 Test Cases PASS)
 
 ---
 
-## 📌 1. Giới thiệu Tổng quan
+## 📌 1. Giới thiệu tổng quan
 
-Trong các trung tâm điều hành an ninh mạng (SOC) hiện đại, các chuyên viên phân tích thường xuyên đối mặt với hiện tượng quá tải cảnh báo (**Alert Fatigue**) với hàng chục nghìn cảnh báo mỗi ngày từ SIEM/EDR, dẫn đến việc bỏ sót các cuộc tấn công nguy hiểm và kéo dài thời gian phản ứng trung bình (**MTTD/MTTR**).
+Đề tài tập trung nghiên cứu và xây dựng hệ thống **Multi-Agent System (MAS)** ứng dụng mô hình ngôn ngữ lớn (LLM) để tự động hóa toàn diện quy trình điều tra, phản ứng và báo cáo sự cố an ninh mạng theo chuẩn **NIST SP 800-61** và ma trận **MITRE ATT&CK**.
 
-Đề tài nghiên cứu và phát triển **Hệ thống Multi-Agent ứng dụng LLM** phối hợp cùng **Wazuh SIEM**, cơ sở tri thức **RAG ChromaDB** và cơ chế an toàn **Human-in-the-Loop (HITL)** nhằm:
-1. **Tự động hóa toàn diện quy trình điều tra** theo chuẩn **NIST SP 800-61 Rev.2** và ma trận **MITRE ATT&CK**.
-2. **Lọc nhiễu thông minh (Triage Ensemble):** Phân loại chính xác các cảnh báo giả (False Positive) và cảnh báo thật (True Positive) với độ tin cậy giải thích chuỗi suy luận (Chain-of-Thought).
-3. **Phân tích số chuyên sâu (Deep Forensics & RCA):** Tự động giải mã chuỗi PowerShell Base64/Gzip đa tầng, tái hiện phả hệ tiến trình Sysmon cấp miligiây (Process Lineage Tree) và truy vết điểm xâm nhập ban đầu (*Patient Zero*).
-4. **Phản ứng an toàn có kiểm soát (HITL):** Đề xuất playbook ngăn chặn (Isolate Host, Block IP, Kill Process, Active Response) kèm cơ chế xem xét, chỉnh sửa tham số và hoàn tác (Rollback).
-5. **Trợ lý ảo tương tác 2 chiều (SOC AI Copilot):** Tích hợp qua API OpenRouter/OmniRouter cho phép chuyên viên đối thoại, truy vấn dữ liệu sự cố và ra lệnh điều khiển hệ thống bằng ngôn ngữ tự nhiên.
+Hệ thống giải quyết bài toán bùng nổ cảnh báo (**Alert Fatigue**) tại trung tâm điều hành an ninh mạng (SOC), rút ngắn thời gian phát hiện và phản ứng trung bình (**MTTD/MTTR**) từ vài giờ xuống còn vài phút.
 
 ---
 
-## 🏗️ 2. Kiến trúc Hệ thống Multi-Agent
+## 🏗️ 2. Kiến trúc Hệ thống Multi-Agent (6 Agents)
 
-Hệ thống được điều phối tuần tự và song song trên nền tảng **LangGraph StateGraph DAG**:
+Hệ thống được điều phối bằng **LangGraph StateGraph** với 6 tác tử chuyên trách:
 
 ```
-[Log thô: Wazuh SIEM Webhook / Sysmon Event 1,3,11 / Windows Security 4624,4625]
-                                  │
-                                  ▼
-                    [1. Data Ingestion Agent]
-                    (Chuẩn hóa log, giải mã đệ quy Deobfuscator)
-                                  │
-                                  ▼
-                 [2. Detection & Triage Agent]
-                 (Ensemble 3 mô hình, xác định True/False Positive)
-                                  │
-                       (Sự cố có thực? is_incident)
-                       ├── False ──► [END: Đóng cảnh báo Benign / Lọc nhiễu]
-                       └── True
-                                  │
-            ┌─────────────────────┴─────────────────────┐
-            ▼                                           ▼
- [3. Threat Intel Agent]                     [4. RCA Agent (Root Cause)]
- (Tra cứu VirusTotal, AbuseIPDB,             (Dựng cây tiến trình Sysmon,
-  RAG Vector ChromaDB MITRE)                  truy vết Patient Zero & Timeline)
-            └─────────────────────┬─────────────────────┘
-                                  │
-                                  ▼
-                 [5. Response Recommendation Agent]
-                 (Sinh kịch bản ngăn chặn NIST SP 800-61 + Active Response)
-                                  │
-                                  ▼
-                 [Trạm dừng Human-in-the-Loop (HITL)]
-                 (Chuyên viên SOC duyệt: APPROVE / REJECT / MODIFY / ROLLBACK)
-                                  │
-                                  ▼
-                      [6. Reporting Agent]
-                      (Tự động xuất báo cáo chuẩn Markdown, JSON, Word .docx)
+[Log thô: Sysmon / Zeek / EVTX]
+               │
+               ▼
+   [1. Data Ingestion Agent] ──► Chuẩn hóa sang ParsedEvent
+               │
+               ▼
+   [2. Detection & Triage Agent]
+               │
+          (is_incident?)
+          ├── False ──► [END: Đóng cảnh báo False Positive]
+          └── True
+               │
+         ┌─────┴────────────────────────┐
+         ▼                              ▼
+[3. Threat Intel Agent]      [4. Root Cause Analysis (RCA) Agent]
+(Tra cứu IoC: VT, AbuseIPDB) (Tái hiện Process Tree & Timeline)
+         └─────┬────────────────────────┘
+               │
+               ▼
+   [5. Response Recommendation Agent] ──► Đề xuất hành động theo NIST Playbooks
+               │
+               ▼
+   [Human-in-the-loop (HITL)] ──────► Chuyên viên SOC duyệt hành động
+               │
+               ▼
+   [6. Reporting Agent] ─────────────► Tự động xuất Báo cáo sự cố toàn diện
 ```
 
-### Phân công chi tiết các Agent:
-1. **Data Ingestion Agent** *(Nam)*: Tiếp nhận log từ Webhook/File, tiền xử lý, bóc tách cấu trúc và tích hợp bộ giải mã đệ quy `AdvancedPowerShellDeobfuscator` (Base64 + GzipStream).
-2. **Detection & Triage Agent** *(Nam)*: Hoạt động như SOC Tier 1, sử dụng mô hình đồng thuận Ensemble phân định mức độ nghiêm trọng, loại tấn công và phát hiện False Positive.
-3. **Threat Intelligence Agent** *(Nam)*: Tích hợp RAG ChromaDB truy vấn ma trận MITRE ATT&CK, trích xuất IoC và tra cứu điểm danh tiếng (Threat Scoring) đa nguồn.
-4. **Root Cause Analysis (RCA) Agent** *(Đô)*: Chuyên viên điều tra số SOC Tier 3, xây dựng cây tiến trình cha-con (Process Tree), xác định vector đột nhập ban đầu và chuỗi 5 giai đoạn Cyber Kill Chain.
-5. **Response Recommendation Agent** *(Đô)*: Sinh mã kịch bản ứng cứu (PowerShell, Bash iptables, Wazuh Active Response API) với chính sách phân quyền an toàn.
-6. **Reporting Agent** *(Đô)*: Biên soạn báo cáo tổng kết theo chuẩn **NIST SP 800-61 Rev.2** và **Nghị định 13/2023/NĐ-CP**, xuất bản định dạng Markdown, JSON và Word `.docx`.
+## 🎯 3. Ba Kịch bản Sự cố Thực nghiệm
+
+Hệ thống được kiểm thử trên 3 kịch bản tấn công thực tế bao phủ đa dạng bề mặt:
+* **Kịch bản 1: Phishing Credential Harvesting & Initial Access:** Email giả mạo Office 365, liên kết lừa đảo thu thập mật khẩu, đăng nhập trái phép từ IP nước ngoài.
+* **Kịch bản 2: Endpoint Malware Execution & Persistence:** Mở tệp văn bản macro, kích hoạt `powershell.exe -enc` tải payload C2, tạo Scheduled Task duy trì quyền truy cập.
+* **Kịch bản 3: Network Reconnaissance & Lateral Movement:** Quét cổng nội bộ SYN scan qua Zeek `conn.log`, khai thác dịch vụ SMB để di chuyển ngang sang máy chủ dữ liệu.
 
 ---
 
-## 💎 3. Điểm Nhấn Kỹ Thuật Độc Đáo (Key Technical Innovations)
-
-- **Cơ chế Event-Driven Webhook thời gian thực:** Tiếp nhận trực tiếp các cảnh báo từ máy ảo Wazuh Manager All-in-One qua endpoint HTTP POST `/api/v1/wazuh-alert` xác thực Bearer Token, có cửa sổ khử trùng lặp cảnh báo (Sliding-window Deduplication).
-- **Bộ giải mã đệ quy đa tầng (Recursive Deobfuscator):** Bóc tách các chuỗi lệnh PowerShell bị mã hóa lồng nhau thường gặp trong mã độc thực chiến (Emotet, Cobalt Strike, RATs).
-- **SOC AI Copilot tương tác 2 chiều:** Tích hợp mô hình ngôn ngữ lớn (OpenRouter/OmniRouter hoặc Local Ollama, kèm Deterministic Rule Engine fallback) hỗ trợ chuyên viên ra lệnh phê duyệt hành động ngăn chặn trực tiếp từ khung chat.
-- **Incident Store & Quản lý Lịch sử Sự cố:** Lưu trữ bền vững (Persistence) trạng thái điều tra dưới dạng JSON, hỗ trợ xem lại lịch sử sự cố và tải lại báo cáo bất cứ lúc nào.
-- **Streamlit Tactical Dashboard:** Giao diện tác chiến trực quan, tích hợp sơ đồ luồng thực thi động, biểu đồ Mermaid DAG, bảng IoC và các thẻ KPI theo dõi MTTR/MTTD.
-
----
-
-## 🎯 4. Bốn Kịch Bản Thực Nghiệm (Cyber Range Scenarios)
-
-Dữ liệu thực nghiệm được tham chiếu chuẩn từ kho nghiên cứu quốc tế **OTRF Mordor Security Datasets** kết hợp mô phỏng trong phòng lab **EVE-NG & Wazuh OVA**:
-1. **Kịch bản 1: Phishing Credential Access (`T1110.003`, `T1078.002`):** Thu thập mật khẩu, đăng nhập trái phép ngoài giờ từ IP bất thường, kích hoạt chuỗi leo thang đặc quyền.
-2. **Kịch bản 2: Endpoint Malware & C2 Reverse Shell (`T1059.001`, `T1027`, `T1071.001`):** Thực thi mã độc qua PowerShell encoded payload, tạo tệp trong thư mục Temp và kết nối C2 Server.
-3. **Kịch bản 3: Network Reconnaissance & Scanning (`T1018`, `T1046`):** Dò quét mạng diện rộng (Ping Sweep, SYN Port Scan) từ máy tấn công Kali Linux.
-4. **Kịch bản 4: Benign Normal Logon (False Positive Verification):** Đăng nhập hợp lệ của quản trị viên trong giờ hành chính, chứng minh khả năng lọc nhiễu và ngắt sớm (Short-circuit) của Triage Agent.
-
----
-
-## 📂 5. Cấu trúc Thư mục Dự án
+## 📂 4. Cấu trúc Thư mục Dự án
 
 ```
 TLCN/
-├── src/                            # Mã nguồn chính của hệ thống
-│   ├── agents/                     # 6 Tác tử AI (Ingestion, Triage, CTI, RCA, Response, Report)
-│   ├── api/                        # Webhook Receiver thời gian thực (FastAPI / Starlette)
-│   ├── copilot/                    # Trợ lý ảo SOC Copilot Chatbot & OmniRouter LLM Provider
-│   ├── core/                       # Schemas (Pydantic v2), StateGraph Orchestrator, HITL, IncidentStore
-│   ├── tools/                      # Deobfuscator, Parsers, CTI, WazuhClient, RAG ChromaDB, Playbooks
-│   └── ui/                         # Streamlit Dashboard, Cyber Banner, Mermaid Diagrams, Components
-├── tests/                          # 19 tệp kiểm thử tự động (198/198 Test Cases PASS 100%)
-├── data/                           # Dữ liệu thực nghiệm & CSDL Vector
-│   ├── chromadb/                   # Vector DB lưu trữ ma trận MITRE ATT&CK & Wazuh Ruleset
-│   ├── incidents/                  # Kho lưu trữ trạng thái các sự cố đã điều tra (JSON)
-│   ├── raw/                        # Bộ dataset nguyên gốc OTRF Mordor (Sysmon JSON Lines)
-│   └── wazuh_alerts/               # Bộ cảnh báo mẫu 4 kịch bản phục vụ demo
-├── docs/                           # Hồ sơ học thuật phục vụ viết thuyết minh & bảo vệ
-│   ├── dataset_provenance.md       # Hồ sơ nguồn gốc dữ liệu OTRF Mordor & ma trận đối chiếu
-│   ├── eve_ng_lab_topology.md      # Đặc tả kiến trúc Lab EVE-NG, VMware NAT & Sysmon
-│   ├── demo_guide.md               # Kịch bản 15 phút thuyết trình và demo trước Hội đồng
-│   ├── incident_report_template.md # Chuẩn khung báo cáo DFIR NIST SP 800-61 Rev.2
-│   ├── wazuh_integration_guide.md  # Hướng dẫn cấu hình Webhook trên máy ảo Wazuh OVA
-│   ├── parallel_soc_workflow_diagram.* # Bộ sơ đồ luồng hệ thống (.html, .png, .svg)
-│   ├── Danh_Sach_Test_Cases_Tong_Hop.docx # File Word danh mục 198 test cases (chuẩn HCMUTE)
-│   └── test_cases_catalog.csv      # Bảng tính Excel quản lý danh mục kiểm thử
-├── scripts/                        # Các script hỗ trợ cài đặt và khởi tạo
-│   ├── init_rag_knowledge_base.py  # Script nạp tri thức MITRE ATT&CK vào ChromaDB
-│   ├── configure_wazuh_ova.sh      # Script tự động cấu hình máy chủ Wazuh
-│   ├── simulate_attacks.py         # Script mô phỏng phát động tấn công từ Kali
-│   └── export_all_testcases.py     # Script trích xuất và xuất bản danh mục test cases
-├── run_live_soc.py                 # File thực thi khởi chạy đồng thời Webhook & Dashboard
-├── requirements.txt                # Danh mục thư viện Python phụ thuộc
-└── README.md                       # Tài liệu tổng quan dự án
+├── docs/
+│   ├── eve_ng_lab_topology.md      # Đặc tả Topology EVE-NG, IP, Sysmon & Wazuh Agent
+│   ├── dataset_provenance.md       # Hồ sơ nguồn gốc dữ liệu OTRF Mordor & Hướng dẫn tính lặp lại
+│   └── incident_report_template.md # Khung chuẩn Báo cáo Phân tích và Xử lý Sự cố An ninh Mạng (NIST/ISO)
+├── data/
+│   ├── raw/
+│   │   ├── mordor/             # Bộ dataset mẫu OTRF Mordor nguyên bản (Sysmon JSONL)
+│   │   └── wazuh/              # 4 bộ dataset cảnh báo Wazuh chuẩn (Multi-stage & Benign)
+│   └── chromadb/               # Vector DB lưu trữ tri thức MITRE ATT&CK & Wazuh Rules
+├── src/
+│   ├── core/
+│   │   ├── schemas.py          # Pydantic v2 schemas chuẩn hóa & WazuhAlert
+│   │   └── state.py            # IncidentState & IncidentStateDict cho LangGraph
+│   ├── agents/
+│   │   └── prompts.py          # System prompts & CoT reasoning cho 6 Agent
+│   └── tools/
+│       ├── parsers.py          # Bộ bóc tách log Sysmon, Zeek, Windows EVTX
+│       ├── threat_intel.py     # Công cụ CTI tra cứu IoC & MITRE ATT&CK
+│       ├── wazuh_client.py     # Bộ công cụ kết nối Wazuh SIEM & Active Response
+│       ├── rag_knowledge_base.py # RAG Knowledge Base ChromaDB & Dual-Backend Fallback
+│       ├── dataset_validator.py # Bộ thẩm định dữ liệu & độ bao phủ MITRE
+│       └── playbooks.py        # Response Playbooks xử lý mã độc & phishing
+├── tests/
+│   ├── test_schemas.py         # Unit tests cho Schemas (4 tests)
+│   ├── test_tools.py           # Unit tests cho Parsers & Threat Intel (4 tests)
+│   ├── test_wazuh.py           # Unit tests cho WazuhClientTool & API (4 tests)
+│   ├── test_dataset_coverage.py # Unit tests kiểm tra Dataset & MITRE (6 tests)
+│   └── test_rag.py             # Unit tests kiểm tra RAG Vector Search & Mordor (12 tests)
+├── scripts/
+│   ├── convert_mordor_to_wazuh.py # Script chuyển đổi Mordor sang Wazuh Alerts
+│   ├── simulate_attacks.py     # Script mô phỏng kịch bản tấn công EVE-NG
+│   ├── init_rag_knowledge_base.py # Script nạp tri thức MITRE ATT&CK & Wazuh Rules
+│   ├── generate_report.py      # Script tạo Báo cáo Tuần 2-3-4 (.docx)
+│   ├── generate_week5_report.py # Script tạo Báo cáo Tuần 5 (.docx)
+│   └── generate_week6_report.py # Script tạo Báo cáo Tuần 6 (.docx)
+├── requirements.txt            # Thư viện phụ thuộc
+└── README.md                   # Tài liệu dự án
 ```
 
 ---
 
-## 🚀 6. Hướng dẫn Cài đặt & Vận hành
+## 📅 5. Kế hoạch và Bảng Phân công Nhiệm vụ (13 Tuần)
 
-### 6.1. Yêu cầu môi trường
-- **Hệ điều hành:** Linux (Ubuntu 22.04+, CachyOS, Debian) hoặc macOS / Windows WSL2.
-- **Python:** Phiên bản 3.10 trở lên (khuyến nghị Python 3.11 – 3.14).
+Hệ thống được triển khai theo lộ trình 13 tuần đã được chuẩn hóa tích hợp cùng **Wazuh SIEM** và **Môi trường Giả lập EVE-NG**:
 
-### 6.2. Cài đặt thư viện
+| Tuần | Thời gian | Hạng mục công việc trọng tâm | Phân công chi tiết | Sản phẩm bàn giao (Deliverable) |
+| :---: | :---: | :--- | :--- | :--- |
+| **1** | 20/09 - 26/09 | Tiếp thu góp ý GVHD, chốt đề cương chi tiết | **Cả nhóm** (Nam: chuẩn hóa format tài liệu; Đô: rà soát mục tiêu kỹ thuật) | Đề cương chi tiết hoàn chỉnh |
+| **2** | 27/09 - 03/10 | Nghiên cứu nền tảng & Tổng quan | • **Nam:** Quy trình NIST SP 800-61, format log (Sysmon, Zeek, EVTX)<br>• **Đô:** LLM, Prompt Engineering, Structured Output, Tool Calling | Bản thảo Báo cáo Chương 1 (Phần 1) |
+| **3** | 04/10 - 10/10 | Nghiên cứu Agent & Tri thức an ninh | • **Nam:** Threat Intelligence, MITRE ATT&CK (STIX/TAXII)<br>• **Đô:** Kiến trúc LangGraph, State Management, Agent Orchestration | Bản thảo Báo cáo Chương 1 (Phần 2 & Khung Chương 2) |
+| **4** | 11/10 - 17/10 | Đặc tả yêu cầu & Kiến trúc hệ thống | • **Cả nhóm:** Xác định 3 kịch bản sự cố & Luồng dữ liệu chung<br>• **Đô:** Thiết kế kiến trúc StateGraph điều phối<br>• **Nam:** Thiết kế Schema Input/Output chuẩn (Pydantic v2) | Tài liệu System Architecture & Sequence Diagram |
+| **5** | 18/10 - 24/10 | Thiết kế chi tiết từng Agent & Tích hợp Wazuh (Làm song song) | • **Nam:** Thiết kế Ingestion Agent (kết nối Wazuh), Triage Agent (Wazuh Rule Level), Threat Intel Agent<br>• **Đô:** Thiết kế RCA Agent, Response Agent (Wazuh Active Response), Reporting Agent | Bản đặc tả chi tiết Prompts, Schemas (WazuhAlert), Tools |
+| **6** | 25/10 - 31/10 | Dựng Lab EVE-NG, Hạ tầng Wazuh & Cơ sở tri thức RAG | • **Nam:** Thiết lập Topology EVE-NG (Firewall, Kali, Win10 Sysmon, Wazuh Server), xuất dataset alert thực tế<br>• **Đô:** Xây dựng Vector DB/ChromaDB lưu trữ MITRE ATT&CK Matrix & Wazuh Ruleset, thẩm định nguồn gốc OTRF Mordor | **Hoàn thành 100%:** Hạ tầng Lab EVE-NG + Hồ sơ nguồn gốc Mordor (dataset_provenance.md) + Bộ dataset 4 kịch bản Wazuh + RAG ChromaDB (**30/30 Unit Tests Passed**) |
+| **7** | 01/11 - 07/11 | Hiện thực hóa Framework & Cụm Agent đầu vào | • **Đô:** Dựng khung LangGraph StateGraph, luồng chuyển trạng thái<br>• **Nam:** Code Wazuh Ingestion Tool (API & File stream) & Detection/Triage Agent | Khung điều phối + Ingestion Agent tiếp nhận cảnh báo Wazuh chạy độc lập |
+| **8** | 08/11 - 14/11 | Hiện thực hóa Cụm Agent Chuyên sâu | • **Nam:** Code Threat Intel Agent (tích hợp API VirusTotal, AbuseIPDB)<br>• **Đô:** Code RCA Agent (bóc tách tiến trình Sysmon từ Wazuh Alert, suy luận attack path) | 2 Agent chuyên sâu vượt qua Unit Test |
+| **9** | 15/11 - 21/11 | Hiện thực Cụm Đề xuất/Báo cáo & TÍCH HỢP ĐỢT 1 | • **Đô:** Code Response Agent (tích hợp Wazuh Active Response API) & Reporting Agent<br>• **Nam:** Ráp cụm Ingestion-Triage-ThreatIntel vào LangGraph | Prototype v0.1: Chạy luồng từ Wazuh Alert → Phân tích đe dọa & Đề xuất phản ứng |
+| **10** | 22/11 - 28/11 | Tích hợp hoàn chỉnh & Dashboard UI | • **Đô:** Tích hợp RCA + Response + Report vào LangGraph, cơ chế HITL duyệt hành động<br>• **Nam:** Xây dựng Dashboard UI bằng Streamlit hiển thị đồng thời Wazuh alerts & Agent graph | Prototype v1.0: Hoàn chỉnh toàn bộ luồng End-to-End có UI tương tác |
+| **11** | 29/11 - 05/12 | Thử nghiệm hệ thống trên 3 kịch bản EVE-NG | • **Nam:** Thực thi kịch bản Phishing & Scanning từ Kali EVE-NG, đo False Positive/Negative<br>• **Đô:** Thực thi kịch bản Malware trên Windows 10 EVE-NG, đo thời gian điều tra (MTTI) | Bộ số liệu thực nghiệm đầy đủ trên môi trường mạng EVE-NG |
+| **12** | 06/12 - 12/12 | Đánh giá so sánh Baseline & Hoàn thiện báo cáo | • **Cả nhóm:** Chạy so sánh Multi-Agent với Single-Agent LLM và Wazuh Rule-based truyền thống<br>• **Nam:** Viết Chương 4 (Triển khai hệ thống EVE-NG, Wazuh & Agent)<br>• **Đô:** Viết Chương 5 (Kết quả thực nghiệm & Đánh giá) | Bản thảo toàn văn Báo cáo (Chương 1 đến 5) |
+| **13** | 13/12 - 14/12 | Chuẩn bị bảo vệ & Đóng gói sản phẩm | • **Nam:** Dựng video demo kịch bản tấn công EVE-NG, thiết kế Slide báo cáo<br>• **Đô:** Kiểm tra mã nguồn, in ấn quyển báo cáo, tổng duyệt thuyết trình | Quyển báo cáo in nộp + Slide + Demo EVE-NG hoàn chỉnh |
+
+---
+
+## 🚀 6. Hướng dẫn Cài đặt & Chạy Thử nghiệm
+
+### Cài đặt thư viện:
 ```bash
-# Tạo và kích hoạt môi trường ảo (Virtual Environment)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Cài đặt toàn bộ dependencies
 pip install -r requirements.txt
 ```
 
-### 6.3. Khởi chạy toàn bộ Hệ thống (Khuyến nghị)
-Sử dụng script tích hợp để khởi chạy đồng thời **Webhook Receiver (Port 8000)** và **Streamlit Dashboard (Port 8501)**:
+### Chạy kiểm thử tự động toàn bộ hệ thống (Unit Tests):
 ```bash
-python run_live_soc.py
+python3 -m unittest discover tests
 ```
-Sau khi khởi chạy thành công:
-- Truy cập Dashboard tác chiến tại: `http://localhost:8501`
-- Endpoint nhận cảnh báo từ Wazuh SIEM: `http://localhost:8000/api/v1/wazuh-alert`
-
-### 6.4. Khởi chạy riêng lẻ từng dịch vụ
-- **Chỉ mở Dashboard UI:**
-  ```bash
-  streamlit run src/ui/dashboard.py
-  ```
-- **Chỉ mở Webhook Receiver:**
-  ```bash
-  python -m uvicorn src.api.webhook_server:app --host 0.0.0.0 --port 8000
-  ```
+*Hiện tại hệ thống đạt **30/30 tests PASS 100%** bao gồm Schemas, Tools, WazuhClient, Dataset Validator và RAG ChromaDB.*
 
 ---
 
-## 🧪 7. Kiểm thử Chất lượng Hệ thống (Test Suite)
-
-Dự án áp dụng phương pháp kiểm thử toàn diện với **198 test cases** tự động bao phủ 100% các thành phần logic cốt lõi:
-
-```bash
-# Thực thi toàn bộ test suite bằng pytest
-pytest tests/ -v
-```
-
-### Kết quả kiểm định:
-```text
-TLCN/tests/test_copilot.py .................                             [  8%]
-TLCN/tests/test_dataset_coverage.py ......                               [ 11%]
-TLCN/tests/test_deobfuscator.py ...............                          [ 19%]
-TLCN/tests/test_hitl.py ........                                         [ 23%]
-TLCN/tests/test_hitl_default_safety.py ......                            [ 26%]
-TLCN/tests/test_hitl_rollback.py ..........                              [ 31%]
-TLCN/tests/test_ingestion_triage.py ...................                  [ 40%]
-TLCN/tests/test_orchestrator.py ..................                       [ 50%]
-TLCN/tests/test_prototype_v1.py ......                                   [ 53%]
-TLCN/tests/test_rag.py ............                                      [ 59%]
-TLCN/tests/test_rca_agent.py ............                                [ 65%]
-TLCN/tests/test_reporting_agent.py .........                             [ 69%]
-TLCN/tests/test_response_agent.py ..........                             [ 74%]
-TLCN/tests/test_schemas.py ....                                          [ 76%]
-TLCN/tests/test_threat_intel_agent.py ..........                         [ 81%]
-TLCN/tests/test_tools.py ....                                            [ 83%]
-TLCN/tests/test_ui.py ...................                                [ 93%]
-TLCN/tests/test_wazuh.py ....                                            [ 95%]
-TLCN/tests/test_webhook_receiver.py .........                            [100%]
-
-============================= 198 passed in 12.65s =============================
-```
-- **Tổng số tests:** 198 test cases.
-- **Tỷ lệ thành công:** **100% PASS (0 Failures, 0 Errors)**.
-- Chi tiết từng mã test case (từ `TC-001` đến `TC-198`) được lập chỉ mục tại [`TLCN/docs/Danh_Sach_Test_Cases_Tong_Hop.docx`](file:///home/nam/Desktop/TLCN-NAM/TLCN/docs/Danh_Sach_Test_Cases_Tong_Hop.docx).
-
----
-
-## 👥 8. Thông tin Liên hệ & Tác quyền
-
-Đề tài được thực hiện bởi nhóm sinh viên ngành An toàn Thông tin – Trường Đại học Sư phạm Kỹ thuật TP.HCM:
-- **Nguyễn Phạm Hoài Nam** – Email: `23162059@student.hcmute.edu.vn`
-- **Phan Trường Đô** – Email: `23162020@student.hcmute.edu.vn`
-- **Giảng viên hướng dẫn:** ThS. Đinh Công Đoan – Email: `doandc@hcmute.edu.vn`
-
-*Mã nguồn được phân phối phục vụ mục đích học tập và nghiên cứu khoa học an toàn thông tin.*
+## 📄 7. Tài liệu Báo cáo & Đề cương
+Toàn bộ các bản thảo báo cáo, đề cương chi tiết đã được lưu trữ tập trung tại thư mục:  
+📁 `/home/nam/Desktop/TLCN-NAM/BC/`
+* `Bao_Cao_Tien_Do_Tuan_6.docx`: Báo cáo kết quả Tuần 6 (Lab EVE-NG, Dataset Wazuh & RAG ChromaDB).
+* `Bao_Cao_Thiet_Ke_Chi_Tiet_Tuan_5.docx`: Đặc tả chi tiết Prompts, Schemas (WazuhAlert) và Tools của 6 Agent.
+* `Bao_Cao_Thuc_Hien_Nhiem_Vu_Tuan_2_3_4.docx`: Báo cáo nghiệm thu giai đoạn Tuần 2, 3, 4.
+* `DC-03-Phan Trường Đô-Nguyễn Phạm Hoài Nam.docx`: Đề cương chi tiết đã duyệt với GVHD.
+* `CongViecChinh.docx`: Bảng kế hoạch tiến độ 13 tuần tích hợp Wazuh & EVE-NG.
