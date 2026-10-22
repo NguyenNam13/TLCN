@@ -118,11 +118,26 @@ class WazuhClientTool:
         parent_process = eventdata.get("parentImage", "").split("\\")[-1] if eventdata.get("parentImage") else None
 
         # Trích xuất network / authentication
-        source_ip = eventdata.get("sourceIp") or eventdata.get("IpAddress") or alert.agent.ip
-        dest_ip = eventdata.get("destinationIp")
+        source_ip = (
+            eventdata.get("sourceIp")
+            or eventdata.get("SourceIp")
+            or eventdata.get("IpAddress")
+            or eventdata.get("ipAddress")
+            or alert.agent.ip
+        )
+        dest_ip = (
+            eventdata.get("destinationIp")
+            or eventdata.get("DestinationIp")
+            or eventdata.get("destinationIP")
+        )
         dest_port = int(eventdata.get("destinationPort")) if eventdata.get("destinationPort") else None
         file_hash = eventdata.get("hashes") or eventdata.get("Hashes")
-        user_name = eventdata.get("user") or eventdata.get("TargetUserName") or eventdata.get("AccountName")
+        user_name = (
+            eventdata.get("user")
+            or eventdata.get("TargetUserName")
+            or eventdata.get("targetUserName")
+            or eventdata.get("AccountName")
+        )
 
         raw_attrs = {
             "wazuh_alert_id": alert.id,

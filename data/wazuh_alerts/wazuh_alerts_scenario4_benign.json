@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": "2026-10-15T08:45:00.000+0000",
+    "rule": {
+      "level": 3,
+      "description": "Windows logon success - routine user interactive session during business hours",
+      "id": "60100",
+      "groups": [
+        "windows",
+        "authentication_success"
+      ]
+    },
+    "agent": {
+      "id": "002",
+      "name": "WIN10-VICTIM-01",
+      "ip": "192.168.1.105"
+    },
+    "id": "1760517900.4001",
+    "full_log": "Event 4624: An account was successfully logged on (Interactive Session)",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "4624",
+          "computer": "WIN10-VICTIM-01"
+        },
+        "eventdata": {
+          "targetUserName": "truongdo",
+          "targetDomainName": "HCMUTE",
+          "logonType": "2",
+          "ipAddress": "127.0.0.1",
+          "workstationName": "WIN10-VICTIM-01",
+          "authenticationPackageName": "Negotiate",
+          "mordorSecurityTrace": "Security-Auditing: Event 4624 Type 2"
+        }
+      }
+    }
+  }
+]

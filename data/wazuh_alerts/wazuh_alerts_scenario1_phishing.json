@@ -1,0 +1,147 @@
+[
+  {
+    "timestamp": "2026-10-15T08:20:05.000+0000",
+    "rule": {
+      "level": 5,
+      "description": "Windows logon failure - Multiple failed logins for domain account",
+      "id": "60105",
+      "mitre": {
+        "id": [
+          "T1110.003"
+        ],
+        "tactic": [
+          "Credential Access"
+        ],
+        "technique": [
+          "Password Spraying"
+        ]
+      },
+      "groups": [
+        "windows",
+        "authentication_failed"
+      ]
+    },
+    "agent": {
+      "id": "002",
+      "name": "WIN10-VICTIM-01",
+      "ip": "192.168.1.105"
+    },
+    "id": "1760516405.1000",
+    "full_log": "Event 4625: An account failed to log on (Bad Password / Spray)",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "4625",
+          "computer": "WIN10-VICTIM-01"
+        },
+        "eventdata": {
+          "targetUserName": "hoainam",
+          "targetDomainName": "HCMUTE",
+          "logonType": "3",
+          "ipAddress": "185.220.101.5",
+          "ipPort": "49810",
+          "failureReason": "%%2313",
+          "mordor_source": "psh_input_capture_promptforcreds",
+          "mordor_utc_time": "2020-10-20 01:32:01.156"
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-10-15T08:22:15.000+0000",
+    "rule": {
+      "level": 10,
+      "description": "Windows logon success from unusual external IP address",
+      "id": "60106",
+      "mitre": {
+        "id": [
+          "T1078.002"
+        ],
+        "tactic": [
+          "Initial Access",
+          "Defense Evasion"
+        ],
+        "technique": [
+          "Valid Accounts: Domain Accounts"
+        ]
+      },
+      "groups": [
+        "windows",
+        "authentication_success"
+      ]
+    },
+    "agent": {
+      "id": "002",
+      "name": "WIN10-VICTIM-01",
+      "ip": "192.168.1.105"
+    },
+    "id": "1760516535.1001",
+    "full_log": "Event 4624: An account was successfully logged on",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "4624",
+          "computer": "WIN10-VICTIM-01"
+        },
+        "eventdata": {
+          "targetUserName": "hoainam",
+          "targetDomainName": "HCMUTE",
+          "logonType": "3",
+          "ipAddress": "185.220.101.5",
+          "ipPort": "49812",
+          "authenticationPackageName": "NTLM",
+          "mordor_source": "psh_input_capture_promptforcreds"
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-10-15T08:23:45.000+0000",
+    "rule": {
+      "level": 8,
+      "description": "Special privileges assigned to new logon session and credential enumeration",
+      "id": "60115",
+      "mitre": {
+        "id": [
+          "T1078",
+          "T1087.002"
+        ],
+        "tactic": [
+          "Privilege Escalation",
+          "Discovery"
+        ],
+        "technique": [
+          "Valid Accounts",
+          "Account Discovery: Domain Account"
+        ]
+      },
+      "groups": [
+        "windows",
+        "privilege_escalation"
+      ]
+    },
+    "agent": {
+      "id": "002",
+      "name": "WIN10-VICTIM-01",
+      "ip": "192.168.1.105"
+    },
+    "id": "1760516625.1002",
+    "full_log": "Event 4672/5379: Special privileges and credential access prompt (Mordor PID 8536)",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "4672",
+          "computer": "WIN10-VICTIM-01"
+        },
+        "eventdata": {
+          "targetUserName": "hoainam",
+          "targetDomainName": "HCMUTE",
+          "privilegeList": "SeSecurityPrivilege SeBackupPrivilege",
+          "mordorClientProcessId": "8536",
+          "mordorReadOperation": "Enumerate Credentials Prompt",
+          "mordorSource": "psh_input_capture_promptforcreds"
+        }
+      }
+    }
+  }
+]

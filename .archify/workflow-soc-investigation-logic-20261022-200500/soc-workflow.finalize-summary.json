@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "workflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/nam/Desktop/TLCN-NAM/TLCN/.archify/workflow-soc-investigation-logic-20261022-200500/candidate.json",
+    "sha256": "86a1d8eaf3b97b70dd55256ffaa944aaaebdeccb0e54e8961b2636ef77e251fd",
+    "bytes": 7697
+  },
+  "artifact": {
+    "path": "/home/nam/Desktop/TLCN-NAM/TLCN/.archify/workflow-soc-investigation-logic-20261022-200500/soc-workflow.html",
+    "sha256": "51cb1bf598ac9312e754fc98f76a54e3283f5f0e947ff493c4c33dfc93c1d325",
+    "bytes": 843964
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "skipped"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "No supported browser found. Install Chrome/Chromium (or Microsoft Edge), or set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/nam/Desktop/TLCN-NAM/TLCN/.archify/workflow-soc-investigation-logic-20261022-200500/soc-workflow.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome/Chromium executable (or Microsoft Edge) and rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/nam/Desktop/TLCN-NAM/TLCN/.archify/workflow-soc-investigation-logic-20261022-200500/soc-workflow.finalize.json",
+    "summaryReceipt": "/home/nam/Desktop/TLCN-NAM/TLCN/.archify/workflow-soc-investigation-logic-20261022-200500/soc-workflow.finalize-summary.json",
+    "browserCheckReceipt": "/home/nam/Desktop/TLCN-NAM/TLCN/.archify/workflow-soc-investigation-logic-20261022-200500/soc-workflow.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-22T13:07:39.192Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 1147,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  }
+}

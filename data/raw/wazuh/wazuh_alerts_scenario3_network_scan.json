@@ -1,5 +1,50 @@
 [
   {
+    "timestamp": "2026-10-15T10:02:10.000+0000",
+    "rule": {
+      "level": 5,
+      "description": "Host discovery sweep detected - Multiple ICMP Echo requests from single source",
+      "id": "5712",
+      "mitre": {
+        "id": [
+          "T1018"
+        ],
+        "tactic": [
+          "Discovery"
+        ],
+        "technique": [
+          "Remote System Discovery"
+        ]
+      },
+      "groups": [
+        "firewall",
+        "network_scan",
+        "ids"
+      ]
+    },
+    "agent": {
+      "id": "001",
+      "name": "PFSENSE-GATEWAY",
+      "ip": "192.168.1.1"
+    },
+    "id": "1760522530.3000",
+    "full_log": "Firewall block: ICMP sweep detected from 192.168.100.10 to subnet 192.168.1.0/24",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "NetDiscovery-01",
+          "computer": "PFSENSE-GATEWAY"
+        },
+        "eventdata": {
+          "sourceIp": "192.168.100.10",
+          "destinationIp": "192.168.1.105",
+          "protocol": "icmp",
+          "mordorOriginHost": "WORKSTATION5.theshire.local"
+        }
+      }
+    }
+  },
+  {
     "timestamp": "2026-10-15T10:05:00.000+0000",
     "rule": {
       "level": 8,
@@ -28,7 +73,7 @@
       "ip": "192.168.1.1"
     },
     "id": "1760522700.3001",
-    "full_log": "Firewall block: multiple SYN dropped from 192.168.1.200 to 192.168.1.105 ports 445, 3389, 22",
+    "full_log": "Firewall block: multiple SYN dropped from 192.168.100.10 to 192.168.1.105 ports 445, 3389, 22",
     "data": {
       "win": {
         "system": {
@@ -36,10 +81,63 @@
           "computer": "PFSENSE-GATEWAY"
         },
         "eventdata": {
-          "sourceIp": "192.168.1.200",
+          "sourceIp": "192.168.100.10",
           "destinationIp": "192.168.1.105",
           "destinationPort": "445",
-          "protocol": "tcp"
+          "protocol": "tcp",
+          "mordorTargetIp": "172.18.38.5",
+          "mordorTargetPort": "389",
+          "mordorTrace": "cmd_sharpview_pcre_net"
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-10-15T10:07:30.000+0000",
+    "rule": {
+      "level": 7,
+      "description": "Aggressive service banner grabbing probe against SMB/RDP endpoints and domain recon",
+      "id": "5715",
+      "mitre": {
+        "id": [
+          "T1595.002"
+        ],
+        "tactic": [
+          "Reconnaissance"
+        ],
+        "technique": [
+          "Active Scanning: Vulnerability Scanning"
+        ]
+      },
+      "groups": [
+        "firewall",
+        "vulnerability_scan",
+        "ids"
+      ]
+    },
+    "agent": {
+      "id": "001",
+      "name": "PFSENSE-GATEWAY",
+      "ip": "192.168.1.1"
+    },
+    "id": "1760522850.3002",
+    "full_log": "IDS Alert: Rapid probe payload detected on SMB 445 from 192.168.100.10",
+    "data": {
+      "win": {
+        "system": {
+          "eventID": "VulnProbe-01",
+          "computer": "PFSENSE-GATEWAY"
+        },
+        "eventdata": {
+          "sourceIp": "192.168.100.10",
+          "destinationIp": "192.168.1.105",
+          "destinationPort": "445",
+          "protocol": "tcp",
+          "mordorTool": "C:\\ProgramData\\SharpView.exe",
+          "mordorCommandLine": "SharpView.exe  Get-ObjectAcl -SamAccountName \"Domain Admins\"",
+          "mordorHashes": "SHA1=7372893A8D936DFBADD279C95F43B29EF0E408F0,MD5=9E603A578175982BFB507A733BD0B0E0,SHA256=2ABB3589B3D2C0814F31FD2D22F5AE4386E73A3AB4C349B0E585FFA6CCDA4593,IMPHASH=F34D5F2D4577ED6D9CEEC516C1F5A744",
+          "mordorProcessId": "3752",
+          "mordorTrace": "cmd_sharpview_pcre_net"
         }
       }
     }

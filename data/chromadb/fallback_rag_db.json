@@ -1,0 +1,360 @@
+{
+  "mitre_attack": {
+    "T1059.001": {
+      "id": "T1059.001",
+      "document": "Technique ID: T1059.001\nName: Command and Scripting Interpreter: PowerShell\nTactic: Execution\nDescription: Adversaries may abuse PowerShell commands and scripts for executing malicious code, downloading payloads from remote command and control servers, and automating discovery or lateral movement. PowerShell is widely used for administrative tasks, making malicious usage easy to blend with benign activity. (Kẻ tấn công lạm dụng PowerShell để thực thi lệnh độc hại, tải script từ xa qua mạng, thực thi fileless và làm bàn đạp mở rộng tấn công).\nDetection: Monitor process creation events for powershell.exe with flags like -enc, -EncodedCommand, -ExecutionPolicy Bypass, -NoProfile, -WindowStyle Hidden. Monitor Script Block Logging (Windows Event ID 4104) for suspicious cmdlets like IEX, DownloadString, Invoke-WebRequest, and Start-Process. Enable Antimalware Scan Interface (AMSI).\nMitigations: Enforce PowerShell Constrained Language Mode via AppLocker or Windows Defender Application Control (WDAC). Restrict PowerShell execution policies across group policies (GPO). Disable or uninstall PowerShell version 2.0 to prevent downgrade attacks.",
+      "metadata": {
+        "technique_id": "T1059.001",
+        "name": "Command and Scripting Interpreter: PowerShell",
+        "tactic": "Execution",
+        "description": "Adversaries may abuse PowerShell commands and scripts for executing malicious code, downloading payloads from remote command and control servers, and automating discovery or lateral movement. PowerShell is widely used for administrative tasks, making malicious usage easy to blend with benign activity. (Kẻ tấn công lạm dụng PowerShell để thực thi lệnh độc hại, tải script từ xa qua mạng, thực thi fileless và làm bàn đạp mở rộng tấn công).",
+        "mitigations": "Enforce PowerShell Constrained Language Mode via AppLocker or Windows Defender Application Control (WDAC). Restrict PowerShell execution policies across group policies (GPO). Disable or uninstall PowerShell version 2.0 to prevent downgrade attacks.",
+        "detection": "Monitor process creation events for powershell.exe with flags like -enc, -EncodedCommand, -ExecutionPolicy Bypass, -NoProfile, -WindowStyle Hidden. Monitor Script Block Logging (Windows Event ID 4104) for suspicious cmdlets like IEX, DownloadString, Invoke-WebRequest, and Start-Process. Enable Antimalware Scan Interface (AMSI)."
+      }
+    },
+    "T1078.002": {
+      "id": "T1078.002",
+      "document": "Technique ID: T1078.002\nName: Valid Accounts: Domain Accounts\nTactic: Defense Evasion, Persistence, Privilege Escalation, Initial Access\nDescription: Adversaries may obtain and abuse credentials of existing domain accounts to gain access, maintain persistence, elevate privileges, and evade defense mechanisms. Compromised domain credentials allow attackers to mimic legitimate domain users and administrators. (Kẻ tấn công lừa đảo đánh cắp thông tin tài khoản miền domain, chiếm đoạt mật khẩu quản trị viên để đăng nhập và kiểm soát toàn bộ hệ thống).\nDetection: Audit Windows Security Event ID 4624 (Successful logon) for unusual logon types (Type 3 network logon or Type 10 RemoteInteractive), anomalous logon hours, logins from unauthorized IP addresses, and sudden access spikes to sensitive servers. Monitor Kerberos Ticket-Granting Service requests (Event ID 4769) for abnormal Kerberoasting activity.\nMitigations: Enforce Multi-Factor Authentication (MFA) for all domain logons and VPN access. Deploy Privileged Access Workstations (PAW) and tier-based administration. Enforce strong password complexity, implement LAPS (Local Administrator Password Solution), and rotate domain admin credentials regularly.",
+      "metadata": {
+        "technique_id": "T1078.002",
+        "name": "Valid Accounts: Domain Accounts",
+        "tactic": "Defense Evasion, Persistence, Privilege Escalation, Initial Access",
+        "description": "Adversaries may obtain and abuse credentials of existing domain accounts to gain access, maintain persistence, elevate privileges, and evade defense mechanisms. Compromised domain credentials allow attackers to mimic legitimate domain users and administrators. (Kẻ tấn công lừa đảo đánh cắp thông tin tài khoản miền domain, chiếm đoạt mật khẩu quản trị viên để đăng nhập và kiểm soát toàn bộ hệ thống).",
+        "mitigations": "Enforce Multi-Factor Authentication (MFA) for all domain logons and VPN access. Deploy Privileged Access Workstations (PAW) and tier-based administration. Enforce strong password complexity, implement LAPS (Local Administrator Password Solution), and rotate domain admin credentials regularly.",
+        "detection": "Audit Windows Security Event ID 4624 (Successful logon) for unusual logon types (Type 3 network logon or Type 10 RemoteInteractive), anomalous logon hours, logins from unauthorized IP addresses, and sudden access spikes to sensitive servers. Monitor Kerberos Ticket-Granting Service requests (Event ID 4769) for abnormal Kerberoasting activity."
+      }
+    },
+    "T1046": {
+      "id": "T1046",
+      "document": "Technique ID: T1046\nName: Network Service Discovery\nTactic: Discovery\nDescription: Adversaries may attempt to get a listing of services and open ports running on remote hosts through port scanning and service probing. This allows attackers to identify vulnerable listening services, management ports like RDP/SSH/SMB, and network topology. (Hành vi quét cổng mạng, dò quét cổng dịch vụ mở SYN scan, xác định các cổng dịch vụ khả dụng trên hệ thống mạng nội bộ).\nDetection: Detect rapid connection attempts from a single internal or external host across multiple destination IP addresses and ports within a short time window. Analyze Zeek conn.log, Suricata/Snort alerts, and firewall connection drops for SYN scan patterns.\nMitigations: Segment internal network into discrete VLANs with micro-segmentation. Configure host-based firewalls to deny inbound traffic by default. Close all unnecessary listening ports and disable unneeded services.",
+      "metadata": {
+        "technique_id": "T1046",
+        "name": "Network Service Discovery",
+        "tactic": "Discovery",
+        "description": "Adversaries may attempt to get a listing of services and open ports running on remote hosts through port scanning and service probing. This allows attackers to identify vulnerable listening services, management ports like RDP/SSH/SMB, and network topology. (Hành vi quét cổng mạng, dò quét cổng dịch vụ mở SYN scan, xác định các cổng dịch vụ khả dụng trên hệ thống mạng nội bộ).",
+        "mitigations": "Segment internal network into discrete VLANs with micro-segmentation. Configure host-based firewalls to deny inbound traffic by default. Close all unnecessary listening ports and disable unneeded services.",
+        "detection": "Detect rapid connection attempts from a single internal or external host across multiple destination IP addresses and ports within a short time window. Analyze Zeek conn.log, Suricata/Snort alerts, and firewall connection drops for SYN scan patterns."
+      }
+    },
+    "T1027": {
+      "id": "T1027",
+      "document": "Technique ID: T1027\nName: Obfuscated/Encoded Files or Information\nTactic: Defense Evasion\nDescription: Adversaries may attempt to make an executable or script difficult to discover or analyze by encrypting, encoding, compressing, or otherwise obfuscating its content and command-line arguments. Common methods include Base64 encoding, XOR obfuscation, string reversal, and variable substitution. (Mã hóa, làm rối chuỗi lệnh và che giấu file thực thi nhằm vượt qua phần mềm diệt virus và giải pháp EDR).\nDetection: Audit process creation command lines for high-entropy strings, Base64 patterns, complex concatenation operators, and packed executables. Inspect script executions de-obfuscated dynamically by AMSI (Antimalware Scan Interface).\nMitigations: Deploy endpoint detection tools supporting behavioral analysis and runtime in-memory inspection. Restrict execution of unsigned scripts and binaries using WDAC or AppLocker.",
+      "metadata": {
+        "technique_id": "T1027",
+        "name": "Obfuscated/Encoded Files or Information",
+        "tactic": "Defense Evasion",
+        "description": "Adversaries may attempt to make an executable or script difficult to discover or analyze by encrypting, encoding, compressing, or otherwise obfuscating its content and command-line arguments. Common methods include Base64 encoding, XOR obfuscation, string reversal, and variable substitution. (Mã hóa, làm rối chuỗi lệnh và che giấu file thực thi nhằm vượt qua phần mềm diệt virus và giải pháp EDR).",
+        "mitigations": "Deploy endpoint detection tools supporting behavioral analysis and runtime in-memory inspection. Restrict execution of unsigned scripts and binaries using WDAC or AppLocker.",
+        "detection": "Audit process creation command lines for high-entropy strings, Base64 patterns, complex concatenation operators, and packed executables. Inspect script executions de-obfuscated dynamically by AMSI (Antimalware Scan Interface)."
+      }
+    },
+    "T1053.005": {
+      "id": "T1053.005",
+      "document": "Technique ID: T1053.005\nName: Scheduled Task/Job: Scheduled Task\nTactic: Execution, Persistence, Privilege Escalation\nDescription: Adversaries may abuse the Windows Task Scheduler to register scheduled tasks that execute malicious binaries, scripts, or payloads at system startup or recurring intervals. (Tạo tác vụ lên lịch định kỳ bằng schtasks để duy trì quyền truy cập lâu dài trên hệ thống).\nDetection: Monitor Windows Security Event ID 4698 (A scheduled task was created), Event ID 4702 (Scheduled task updated), and Sysmon Event ID 1 for executions of schtasks.exe with parameters /create, /change, or /run.\nMitigations: Restrict permissions to create and modify scheduled tasks to local and domain administrators only. Regularly audit scheduled task entries in C:\\Windows\\System32\\Tasks and registry keys under HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache.",
+      "metadata": {
+        "technique_id": "T1053.005",
+        "name": "Scheduled Task/Job: Scheduled Task",
+        "tactic": "Execution, Persistence, Privilege Escalation",
+        "description": "Adversaries may abuse the Windows Task Scheduler to register scheduled tasks that execute malicious binaries, scripts, or payloads at system startup or recurring intervals. (Tạo tác vụ lên lịch định kỳ bằng schtasks để duy trì quyền truy cập lâu dài trên hệ thống).",
+        "mitigations": "Restrict permissions to create and modify scheduled tasks to local and domain administrators only. Regularly audit scheduled task entries in C:\\Windows\\System32\\Tasks and registry keys under HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache.",
+        "detection": "Monitor Windows Security Event ID 4698 (A scheduled task was created), Event ID 4702 (Scheduled task updated), and Sysmon Event ID 1 for executions of schtasks.exe with parameters /create, /change, or /run."
+      }
+    },
+    "T1071.001": {
+      "id": "T1071.001",
+      "document": "Technique ID: T1071.001\nName: Application Layer Protocol: Web Protocols\nTactic: Command and Control\nDescription: Adversaries may communicate using application layer web protocols (HTTP, HTTPS) to disguise command and control (C2) traffic, exfiltrate data, and blend in with regular enterprise web browsing traffic. (Kênh điều khiển C2 qua giao thức web HTTP/HTTPS).\nDetection: Analyze web proxy and firewall logs for periodic beaconing intervals, anomalous User-Agent strings, long URI queries, and direct connections to newly registered domains (NRDs) or dynamic DNS services. Inspect encrypted traffic via SSL/TLS decryption.\nMitigations: Route all outbound HTTP/HTTPS traffic through an enterprise proxy with SSL inspection. Block uncategorized or malicious domains using DNS sinkholing and Threat Intelligence feeds.",
+      "metadata": {
+        "technique_id": "T1071.001",
+        "name": "Application Layer Protocol: Web Protocols",
+        "tactic": "Command and Control",
+        "description": "Adversaries may communicate using application layer web protocols (HTTP, HTTPS) to disguise command and control (C2) traffic, exfiltrate data, and blend in with regular enterprise web browsing traffic. (Kênh điều khiển C2 qua giao thức web HTTP/HTTPS).",
+        "mitigations": "Route all outbound HTTP/HTTPS traffic through an enterprise proxy with SSL inspection. Block uncategorized or malicious domains using DNS sinkholing and Threat Intelligence feeds.",
+        "detection": "Analyze web proxy and firewall logs for periodic beaconing intervals, anomalous User-Agent strings, long URI queries, and direct connections to newly registered domains (NRDs) or dynamic DNS services. Inspect encrypted traffic via SSL/TLS decryption."
+      }
+    },
+    "T1566.002": {
+      "id": "T1566.002",
+      "document": "Technique ID: T1566.002\nName: Phishing: Spearphishing Link\nTactic: Initial Access\nDescription: Adversaries may send spearphishing emails containing malicious hyperlinks to lure targeted individuals into visiting credential harvesting login pages or downloading weaponized payloads. (Hình thức lừa đảo qua email chứa liên kết độc hại, dụ nạn nhân đăng nhập vào trang web giả mạo để lấy cắp mật khẩu tài khoản hoặc cài cắm mã độc).\nDetection: Inspect inbound emails with secure email gateways (SEG) for domain spoofing, URL redirection, and brand impersonation. Monitor web browser process invocations initiated from mail client processes such as outlook.exe.\nMitigations: Implement email authentication mechanisms including SPF, DKIM, and DMARC. Deploy web proxy URL sandboxing, mandate Multi-Factor Authentication (MFA), and conduct continuous anti-phishing user training.",
+      "metadata": {
+        "technique_id": "T1566.002",
+        "name": "Phishing: Spearphishing Link",
+        "tactic": "Initial Access",
+        "description": "Adversaries may send spearphishing emails containing malicious hyperlinks to lure targeted individuals into visiting credential harvesting login pages or downloading weaponized payloads. (Hình thức lừa đảo qua email chứa liên kết độc hại, dụ nạn nhân đăng nhập vào trang web giả mạo để lấy cắp mật khẩu tài khoản hoặc cài cắm mã độc).",
+        "mitigations": "Implement email authentication mechanisms including SPF, DKIM, and DMARC. Deploy web proxy URL sandboxing, mandate Multi-Factor Authentication (MFA), and conduct continuous anti-phishing user training.",
+        "detection": "Inspect inbound emails with secure email gateways (SEG) for domain spoofing, URL redirection, and brand impersonation. Monitor web browser process invocations initiated from mail client processes such as outlook.exe."
+      }
+    },
+    "T1021.002": {
+      "id": "T1021.002",
+      "document": "Technique ID: T1021.002\nName: Remote Services: SMB/Windows Admin Shares\nTactic: Lateral Movement\nDescription: Adversaries may leverage SMB file sharing and administrative network shares (C$, ADMIN$, IPC$) to transfer malicious files, execute commands remotely, and propagate laterally across domain workstations. (Lợi dụng chia sẻ tệp tin SMB và admin share để di chuyển ngang trong mạng nội bộ).\nDetection: Monitor Windows Security Event ID 5140 (A network share object was accessed), Event ID 5145 (Detailed network share access), and Sysmon Event ID 3 for outbound TCP port 445 connections to internal hosts.\nMitigations: Disable SMBv1 entirely. Block inbound TCP port 445 between internal workstation subnets using host firewalls. Use LAPS to prevent local administrator credential reuse across endpoints.",
+      "metadata": {
+        "technique_id": "T1021.002",
+        "name": "Remote Services: SMB/Windows Admin Shares",
+        "tactic": "Lateral Movement",
+        "description": "Adversaries may leverage SMB file sharing and administrative network shares (C$, ADMIN$, IPC$) to transfer malicious files, execute commands remotely, and propagate laterally across domain workstations. (Lợi dụng chia sẻ tệp tin SMB và admin share để di chuyển ngang trong mạng nội bộ).",
+        "mitigations": "Disable SMBv1 entirely. Block inbound TCP port 445 between internal workstation subnets using host firewalls. Use LAPS to prevent local administrator credential reuse across endpoints.",
+        "detection": "Monitor Windows Security Event ID 5140 (A network share object was accessed), Event ID 5145 (Detailed network share access), and Sysmon Event ID 3 for outbound TCP port 445 connections to internal hosts."
+      }
+    },
+    "T1110": {
+      "id": "T1110",
+      "document": "Technique ID: T1110\nName: Brute Force\nTactic: Credential Access\nDescription: Adversaries may use brute force attacks (including password spraying, credential stuffing, and dictionary guessing) to guess passwords and systematically compromise user accounts. (Tấn công vét cạn mật khẩu dò tìm thông tin đăng nhập tự động qua SSH, RDP, Web).\nDetection: Detect a surge of failed authentication attempts in a short timeframe (Windows Event ID 4625, Linux sshd authentication failures, Wazuh rule 5710/5712). Monitor Event ID 4740 for multiple account lockout occurrences.\nMitigations: Enforce strict account lockout thresholds after consecutive failed attempts. Mandate complex passwords, deploy rate limiting on login interfaces, and enforce Multi-Factor Authentication (MFA).",
+      "metadata": {
+        "technique_id": "T1110",
+        "name": "Brute Force",
+        "tactic": "Credential Access",
+        "description": "Adversaries may use brute force attacks (including password spraying, credential stuffing, and dictionary guessing) to guess passwords and systematically compromise user accounts. (Tấn công vét cạn mật khẩu dò tìm thông tin đăng nhập tự động qua SSH, RDP, Web).",
+        "mitigations": "Enforce strict account lockout thresholds after consecutive failed attempts. Mandate complex passwords, deploy rate limiting on login interfaces, and enforce Multi-Factor Authentication (MFA).",
+        "detection": "Detect a surge of failed authentication attempts in a short timeframe (Windows Event ID 4625, Linux sshd authentication failures, Wazuh rule 5710/5712). Monitor Event ID 4740 for multiple account lockout occurrences."
+      }
+    },
+    "T1486": {
+      "id": "T1486",
+      "document": "Technique ID: T1486\nName: Data Encrypted for Impact\nTactic: Impact\nDescription: Adversaries may encrypt critical data and documents on local drives and shared network storage, interrupting operational workflows and demanding financial ransom for the decryption keys. (Mã độc tống tiền ransomware mã hóa tệp tin hàng loạt gây gián đoạn hệ thống).\nDetection: Detect abnormal high-frequency file modifications and renames with new unknown file extensions. Monitor for process executions attempting to delete Volume Shadow Copies (e.g., vssadmin delete shadows, wbadmin). Check Sysmon Event 11 for rapid file creation of ransom notes.\nMitigations: Maintain offline, immutable, and air-gapped backups. Implement EDR anti-ransomware behavioral monitoring to automatically terminate rogue encryption processes. Restrict write permissions on shared network drives.",
+      "metadata": {
+        "technique_id": "T1486",
+        "name": "Data Encrypted for Impact",
+        "tactic": "Impact",
+        "description": "Adversaries may encrypt critical data and documents on local drives and shared network storage, interrupting operational workflows and demanding financial ransom for the decryption keys. (Mã độc tống tiền ransomware mã hóa tệp tin hàng loạt gây gián đoạn hệ thống).",
+        "mitigations": "Maintain offline, immutable, and air-gapped backups. Implement EDR anti-ransomware behavioral monitoring to automatically terminate rogue encryption processes. Restrict write permissions on shared network drives.",
+        "detection": "Detect abnormal high-frequency file modifications and renames with new unknown file extensions. Monitor for process executions attempting to delete Volume Shadow Copies (e.g., vssadmin delete shadows, wbadmin). Check Sysmon Event 11 for rapid file creation of ransom notes."
+      }
+    },
+    "T1056.002": {
+      "id": "T1056.002",
+      "document": "Technique ID: T1056.002\nName: Input Capture: GUI Input Capture\nTactic: Credential Access, Collection\nDescription: Adversaries may mimic a legitimate dialog box, prompt, or capture graphical user interface inputs to obtain credentials from users. This includes prompting fake Windows logon dialogs, harvesting credentials via fake Office 365 or portal prompts. (Kẻ tấn công lừa đảo hiển thị cửa sổ nhập mật khẩu giả mạo GUI hoặc thu thập thông tin đăng nhập trực tiếp từ giao diện người dùng).\nDetection: Detect unusual processes spawning credential prompt dialogs (e.g., PowerShell invoking Windows Forms or WPF credential prompts). Monitor for Credential UI APIs like CredUIPromptForWindowsCredentials. Inspect event logs for abnormal user authentication events occurring immediately after an untrusted process creation.\nMitigations: Mandate Multi-Factor Authentication (MFA) with FIDO2/WebAuthn keys. Train users to recognize suspicious dialog boxes and never enter domain credentials into unexpected pop-ups. Enforce Credential Guard on Windows 10/11 enterprise systems.",
+      "metadata": {
+        "technique_id": "T1056.002",
+        "name": "Input Capture: GUI Input Capture",
+        "tactic": "Credential Access, Collection",
+        "description": "Adversaries may mimic a legitimate dialog box, prompt, or capture graphical user interface inputs to obtain credentials from users. This includes prompting fake Windows logon dialogs, harvesting credentials via fake Office 365 or portal prompts. (Kẻ tấn công lừa đảo hiển thị cửa sổ nhập mật khẩu giả mạo GUI hoặc thu thập thông tin đăng nhập trực tiếp từ giao diện người dùng).",
+        "mitigations": "Mandate Multi-Factor Authentication (MFA) with FIDO2/WebAuthn keys. Train users to recognize suspicious dialog boxes and never enter domain credentials into unexpected pop-ups. Enforce Credential Guard on Windows 10/11 enterprise systems.",
+        "detection": "Detect unusual processes spawning credential prompt dialogs (e.g., PowerShell invoking Windows Forms or WPF credential prompts). Monitor for Credential UI APIs like CredUIPromptForWindowsCredentials. Inspect event logs for abnormal user authentication events occurring immediately after an untrusted process creation."
+      }
+    },
+    "T1018": {
+      "id": "T1018",
+      "document": "Technique ID: T1018\nName: Remote System Discovery\nTactic: Discovery\nDescription: Adversaries may attempt to get a listing of other systems by IP address, hostname, or other logical identifiers on a network through ICMP ping sweeps, ARP broadcasts, or Active Directory computer queries. This reconnaissance enables adversaries to plan lateral movement paths. (Kỹ thuật dò quét và lập danh sách các máy chủ hoạt động trong mạng nội bộ thông qua ping sweep ICMP hoặc truy vấn Active Directory).\nDetection: Monitor network traffic and firewall drop/pass logs for sudden high volumes of ICMP Echo Requests sent across subnets from a single source host within a brief timeframe. Audit command-line executions of net view, ping, arp -a, and Test-Connection in Sysmon Event ID 1.\nMitigations: Configure internal network firewalls to block unnecessary ICMP sweeps between workstation subnets. Implement network segmentation and micro-segmentation to limit visibility across subnets.",
+      "metadata": {
+        "technique_id": "T1018",
+        "name": "Remote System Discovery",
+        "tactic": "Discovery",
+        "description": "Adversaries may attempt to get a listing of other systems by IP address, hostname, or other logical identifiers on a network through ICMP ping sweeps, ARP broadcasts, or Active Directory computer queries. This reconnaissance enables adversaries to plan lateral movement paths. (Kỹ thuật dò quét và lập danh sách các máy chủ hoạt động trong mạng nội bộ thông qua ping sweep ICMP hoặc truy vấn Active Directory).",
+        "mitigations": "Configure internal network firewalls to block unnecessary ICMP sweeps between workstation subnets. Implement network segmentation and micro-segmentation to limit visibility across subnets.",
+        "detection": "Monitor network traffic and firewall drop/pass logs for sudden high volumes of ICMP Echo Requests sent across subnets from a single source host within a brief timeframe. Audit command-line executions of net view, ping, arp -a, and Test-Connection in Sysmon Event ID 1."
+      }
+    },
+    "T1087": {
+      "id": "T1087",
+      "document": "Technique ID: T1087\nName: Account Discovery\nTactic: Discovery\nDescription: Adversaries may attempt to get a listing of local or domain accounts to determine which accounts exist on the system and which have elevated administrative privileges. This includes enumerating Active Directory users, domain administrators, and service accounts. (Dò quét và thu thập danh sách tài khoản người dùng, tài khoản quản trị miền Domain Admins nhằm phục vụ bước leo thang đặc quyền).\nDetection: Monitor process command lines for tools like net user, net group, dsquery, Get-ADUser, and PowerView cmdlets. Monitor Windows Security Event ID 4661 (Handle to an object was requested) and Event 4798/4799 for abnormal domain group enumeration.\nMitigations: Restrict permissions for standard domain users to query sensitive Active Directory objects and groups. Enable Active Directory auditing and deploy Honey Accounts (Decoy accounts) to detect unauthorized reconnaissance.",
+      "metadata": {
+        "technique_id": "T1087",
+        "name": "Account Discovery",
+        "tactic": "Discovery",
+        "description": "Adversaries may attempt to get a listing of local or domain accounts to determine which accounts exist on the system and which have elevated administrative privileges. This includes enumerating Active Directory users, domain administrators, and service accounts. (Dò quét và thu thập danh sách tài khoản người dùng, tài khoản quản trị miền Domain Admins nhằm phục vụ bước leo thang đặc quyền).",
+        "mitigations": "Restrict permissions for standard domain users to query sensitive Active Directory objects and groups. Enable Active Directory auditing and deploy Honey Accounts (Decoy accounts) to detect unauthorized reconnaissance.",
+        "detection": "Monitor process command lines for tools like net user, net group, dsquery, Get-ADUser, and PowerView cmdlets. Monitor Windows Security Event ID 4661 (Handle to an object was requested) and Event 4798/4799 for abnormal domain group enumeration."
+      }
+    },
+    "T1087.002": {
+      "id": "T1087.002",
+      "document": "Technique ID: T1087.002\nName: Account Discovery: Domain Account\nTactic: Discovery\nDescription: Adversaries may attempt to get a listing of domain accounts to identify targeted individuals, privileged administrators, and service accounts in the Active Directory environment. (Thu thập thông tin tài khoản miền Active Directory để chọn mục tiêu tấn công và leo quyền).\nDetection: Audit Windows Security Event ID 4672 (Special privileges assigned) and Event ID 4624 for unusual administrative logon sessions. Monitor network traffic to Domain Controllers on LDAP/LDAPS (ports 389/636) and RPC (port 135/445).\nMitigations: Implement Least Privilege Access. Restrict RPC and LDAP queries from non-administrative endpoints. Monitor Active Directory replication traffic.",
+      "metadata": {
+        "technique_id": "T1087.002",
+        "name": "Account Discovery: Domain Account",
+        "tactic": "Discovery",
+        "description": "Adversaries may attempt to get a listing of domain accounts to identify targeted individuals, privileged administrators, and service accounts in the Active Directory environment. (Thu thập thông tin tài khoản miền Active Directory để chọn mục tiêu tấn công và leo quyền).",
+        "mitigations": "Implement Least Privilege Access. Restrict RPC and LDAP queries from non-administrative endpoints. Monitor Active Directory replication traffic.",
+        "detection": "Audit Windows Security Event ID 4672 (Special privileges assigned) and Event ID 4624 for unusual administrative logon sessions. Monitor network traffic to Domain Controllers on LDAP/LDAPS (ports 389/636) and RPC (port 135/445)."
+      }
+    }
+  },
+  "wazuh_rules": {
+    "60106": {
+      "id": "60106",
+      "document": "Wazuh Rule ID: 60106\nSeverity Level: 8\nDescription: Windows Event - PowerShell execution with encoded/suspicious command (Phát hiện PowerShell thực thi lệnh mã hóa Base64 hoặc tải script từ xa)\nMITRE ATT&CK IDs: T1059.001, T1027\nRemediation: Immediately isolate the infected host from the network. Kill the running powershell.exe process and extract full command-line arguments. Review PowerShell Script Block logs (Event ID 4104) to analyze decoded script contents. Scan system memory for injected payloads.",
+      "metadata": {
+        "rule_id": "60106",
+        "level": 8,
+        "description": "Windows Event - PowerShell execution with encoded/suspicious command (Phát hiện PowerShell thực thi lệnh mã hóa Base64 hoặc tải script từ xa)",
+        "mitre_ids": [
+          "T1059.001",
+          "T1027"
+        ],
+        "remediation": "Immediately isolate the infected host from the network. Kill the running powershell.exe process and extract full command-line arguments. Review PowerShell Script Block logs (Event ID 4104) to analyze decoded script contents. Scan system memory for injected payloads."
+      }
+    },
+    "92211": {
+      "id": "92211",
+      "document": "Wazuh Rule ID: 92211\nSeverity Level: 10\nDescription: Web attack - SQL Injection attempt detected via HTTP query or POST body (Tấn công SQL Injection vào ứng dụng web thông qua tham số HTTP)\nMITRE ATT&CK IDs: T1190\nRemediation: Add attacker IP address to perimeter firewall or WAF ban list immediately. Sanitize and parameterize all SQL queries within the vulnerable web application codebase. Inspect database query logs to verify if data exfiltration or table modification occurred.",
+      "metadata": {
+        "rule_id": "92211",
+        "level": 10,
+        "description": "Web attack - SQL Injection attempt detected via HTTP query or POST body (Tấn công SQL Injection vào ứng dụng web thông qua tham số HTTP)",
+        "mitre_ids": [
+          "T1190"
+        ],
+        "remediation": "Add attacker IP address to perimeter firewall or WAF ban list immediately. Sanitize and parameterize all SQL queries within the vulnerable web application codebase. Inspect database query logs to verify if data exfiltration or table modification occurred."
+      }
+    },
+    "5710": {
+      "id": "5710",
+      "document": "Wazuh Rule ID: 5710\nSeverity Level: 5\nDescription: SSH insecure connection attempt - Unauthorized host or failed login attempt (Đăng nhập SSH thất bại từ địa chỉ không xác thực)\nMITRE ATT&CK IDs: T1110\nRemediation: Check source IP reputation against threat intelligence feeds. Verify whether the attempt was an authorized user typo. If repetitive, trigger Wazuh Active Response to ban source IP for 1 hour.",
+      "metadata": {
+        "rule_id": "5710",
+        "level": 5,
+        "description": "SSH insecure connection attempt - Unauthorized host or failed login attempt (Đăng nhập SSH thất bại từ địa chỉ không xác thực)",
+        "mitre_ids": [
+          "T1110"
+        ],
+        "remediation": "Check source IP reputation against threat intelligence feeds. Verify whether the attempt was an authorized user typo. If repetitive, trigger Wazuh Active Response to ban source IP for 1 hour."
+      }
+    },
+    "5715": {
+      "id": "5715",
+      "document": "Wazuh Rule ID: 5715\nSeverity Level: 3\nDescription: SSH authentication succeeded (Đăng nhập SSH thành công vào hệ thống Linux)\nMITRE ATT&CK IDs: T1078.002, T1078\nRemediation: Validate source IP and username against approved administrative maintenance rosters. Enforce SSH key-based authentication and disable root password logins over SSH.",
+      "metadata": {
+        "rule_id": "5715",
+        "level": 3,
+        "description": "SSH authentication succeeded (Đăng nhập SSH thành công vào hệ thống Linux)",
+        "mitre_ids": [
+          "T1078.002",
+          "T1078"
+        ],
+        "remediation": "Validate source IP and username against approved administrative maintenance rosters. Enforce SSH key-based authentication and disable root password logins over SSH."
+      }
+    },
+    "60115": {
+      "id": "60115",
+      "document": "Wazuh Rule ID: 60115\nSeverity Level: 10\nDescription: Windows Event - A scheduled task was created via schtasks or API (Tạo scheduled task mới trên hệ điều hành Windows)\nMITRE ATT&CK IDs: T1053.005\nRemediation: Inspect Windows Security Event 4698 to identify Task Name, Action executable path, and user creator account. If unauthorized, delete the scheduled task immediately using schtasks /delete /tn <TaskName> /f and inspect binary payload.",
+      "metadata": {
+        "rule_id": "60115",
+        "level": 10,
+        "description": "Windows Event - A scheduled task was created via schtasks or API (Tạo scheduled task mới trên hệ điều hành Windows)",
+        "mitre_ids": [
+          "T1053.005"
+        ],
+        "remediation": "Inspect Windows Security Event 4698 to identify Task Name, Action executable path, and user creator account. If unauthorized, delete the scheduled task immediately using schtasks /delete /tn <TaskName> /f and inspect binary payload."
+      }
+    },
+    "92215": {
+      "id": "92215",
+      "document": "Wazuh Rule ID: 92215\nSeverity Level: 8\nDescription: Web attack - Cross-Site Scripting (XSS) attempt detected (Tấn công XSS vào máy chủ web)\nMITRE ATT&CK IDs: T1059.007, T1190\nRemediation: Sanitize user inputs and enforce context-aware HTML entity encoding. Implement Content Security Policy (CSP) headers on the web server to restrict script execution contexts.",
+      "metadata": {
+        "rule_id": "92215",
+        "level": 8,
+        "description": "Web attack - Cross-Site Scripting (XSS) attempt detected (Tấn công XSS vào máy chủ web)",
+        "mitre_ids": [
+          "T1059.007",
+          "T1190"
+        ],
+        "remediation": "Sanitize user inputs and enforce context-aware HTML entity encoding. Implement Content Security Policy (CSP) headers on the web server to restrict script execution contexts."
+      }
+    },
+    "100002": {
+      "id": "100002",
+      "document": "Wazuh Rule ID: 100002\nSeverity Level: 12\nDescription: Custom Sysmon - Cobalt Strike Beacon / Suspicious process spawned from MS Word (Tiến trình lạ powershell/cmd sinh ra từ Microsoft Word nghi vấn macro độc hại)\nMITRE ATT&CK IDs: T1566.002, T1059.001\nRemediation: Trigger emergency host network isolation. Dump memory of spawned child process for reverse engineering. Block associated C2 IP and domain on edge firewalls. Invalidate compromised user session tokens and reset Active Directory password.",
+      "metadata": {
+        "rule_id": "100002",
+        "level": 12,
+        "description": "Custom Sysmon - Cobalt Strike Beacon / Suspicious process spawned from MS Word (Tiến trình lạ powershell/cmd sinh ra từ Microsoft Word nghi vấn macro độc hại)",
+        "mitre_ids": [
+          "T1566.002",
+          "T1059.001"
+        ],
+        "remediation": "Trigger emergency host network isolation. Dump memory of spawned child process for reverse engineering. Block associated C2 IP and domain on edge firewalls. Invalidate compromised user session tokens and reset Active Directory password."
+      }
+    },
+    "5501": {
+      "id": "5501",
+      "document": "Wazuh Rule ID: 5501\nSeverity Level: 3\nDescription: PAM: Login session opened (Phiên đăng nhập người dùng mở trên hệ điều hành)\nMITRE ATT&CK IDs: T1078\nRemediation: Correlate with VPN connection logs and physical badge access records. Monitor user activity for suspicious privilege escalation commands (sudo su, chmod +s).",
+      "metadata": {
+        "rule_id": "5501",
+        "level": 3,
+        "description": "PAM: Login session opened (Phiên đăng nhập người dùng mở trên hệ điều hành)",
+        "mitre_ids": [
+          "T1078"
+        ],
+        "remediation": "Correlate with VPN connection logs and physical badge access records. Monitor user activity for suspicious privilege escalation commands (sudo su, chmod +s)."
+      }
+    },
+    "5502": {
+      "id": "5502",
+      "document": "Wazuh Rule ID: 5502\nSeverity Level: 3\nDescription: PAM: Login session closed (Phiên đăng nhập người dùng kết thúc)\nMITRE ATT&CK IDs: T1078\nRemediation: Record session duration and calculate baseline behavioral profile for user activity auditing.",
+      "metadata": {
+        "rule_id": "5502",
+        "level": 3,
+        "description": "PAM: Login session closed (Phiên đăng nhập người dùng kết thúc)",
+        "mitre_ids": [
+          "T1078"
+        ],
+        "remediation": "Record session duration and calculate baseline behavioral profile for user activity auditing."
+      }
+    },
+    "5712": {
+      "id": "5712",
+      "document": "Wazuh Rule ID: 5712\nSeverity Level: 10\nDescription: SSH brute force attempt - Multiple failed logins from same source (Tấn công brute force SSH hàng loạt từ một địa chỉ IP)\nMITRE ATT&CK IDs: T1110\nRemediation: Execute Wazuh Active Response firewall-drop script to block the offending IP address for 24 hours. Enforce fail2ban and mandate MFA for SSH remote access.",
+      "metadata": {
+        "rule_id": "5712",
+        "level": 10,
+        "description": "SSH brute force attempt - Multiple failed logins from same source (Tấn công brute force SSH hàng loạt từ một địa chỉ IP)",
+        "mitre_ids": [
+          "T1110"
+        ],
+        "remediation": "Execute Wazuh Active Response firewall-drop script to block the offending IP address for 24 hours. Enforce fail2ban and mandate MFA for SSH remote access."
+      }
+    },
+    "60105": {
+      "id": "60105",
+      "document": "Wazuh Rule ID: 60105\nSeverity Level: 5\nDescription: Windows logon failure - Multiple failed logins for domain account (Đăng nhập thất bại liên tiếp nghi vấn password spraying)\nMITRE ATT&CK IDs: T1110.003\nRemediation: Audit authentication logs for source IP address. If rate exceeds policy threshold, trigger temporary account lockout or block source IP at perimeter firewall.",
+      "metadata": {
+        "rule_id": "60105",
+        "level": 5,
+        "description": "Windows logon failure - Multiple failed logins for domain account (Đăng nhập thất bại liên tiếp nghi vấn password spraying)",
+        "mitre_ids": [
+          "T1110.003"
+        ],
+        "remediation": "Audit authentication logs for source IP address. If rate exceeds policy threshold, trigger temporary account lockout or block source IP at perimeter firewall."
+      }
+    },
+    "92213": {
+      "id": "92213",
+      "document": "Wazuh Rule ID: 92213\nSeverity Level: 10\nDescription: Sysmon - Event 3: Suspicious network connection initiated by PowerShell to external C2 (PowerShell kết nối mạng ra IP máy chủ điều khiển C2 bên ngoài)\nMITRE ATT&CK IDs: T1071.001\nRemediation: Immediately isolate endpoint from network. Terminate the offending PowerShell process. Block external destination IP and port on perimeter firewall and inspect DNS queries.",
+      "metadata": {
+        "rule_id": "92213",
+        "level": 10,
+        "description": "Sysmon - Event 3: Suspicious network connection initiated by PowerShell to external C2 (PowerShell kết nối mạng ra IP máy chủ điều khiển C2 bên ngoài)",
+        "mitre_ids": [
+          "T1071.001"
+        ],
+        "remediation": "Immediately isolate endpoint from network. Terminate the offending PowerShell process. Block external destination IP and port on perimeter firewall and inspect DNS queries."
+      }
+    },
+    "92218": {
+      "id": "92218",
+      "document": "Wazuh Rule ID: 92218\nSeverity Level: 8\nDescription: Sysmon - Event 1: Persistence established via schtasks.exe registration (Duy trì quyền truy cập qua Scheduled Task schtasks)\nMITRE ATT&CK IDs: T1053.005\nRemediation: Inspect task action path in Task Scheduler. Delete rogue scheduled task and remove binary payload from disk. Audit registry run keys.",
+      "metadata": {
+        "rule_id": "92218",
+        "level": 8,
+        "description": "Sysmon - Event 1: Persistence established via schtasks.exe registration (Duy trì quyền truy cập qua Scheduled Task schtasks)",
+        "mitre_ids": [
+          "T1053.005"
+        ],
+        "remediation": "Inspect task action path in Task Scheduler. Delete rogue scheduled task and remove binary payload from disk. Audit registry run keys."
+      }
+    },
+    "60100": {
+      "id": "60100",
+      "document": "Wazuh Rule ID: 60100\nSeverity Level: 3\nDescription: Windows logon success - routine user interactive session during business hours (Đăng nhập hợp lệ giờ hành chính - Benign Baseline)\nMITRE ATT&CK IDs: T1078\nRemediation: Routine benign user activity. No remediation action needed.",
+      "metadata": {
+        "rule_id": "60100",
+        "level": 3,
+        "description": "Windows logon success - routine user interactive session during business hours (Đăng nhập hợp lệ giờ hành chính - Benign Baseline)",
+        "mitre_ids": [
+          "T1078"
+        ],
+        "remediation": "Routine benign user activity. No remediation action needed."
+      }
+    }
+  }
+}
