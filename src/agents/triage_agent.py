@@ -12,11 +12,16 @@ Nhiệm vụ:
 4. Cập nhật trạng thái IncidentState xuyên suốt pipeline.
 """
 
+import os
 import re
+import json
+import logging
 import ipaddress
 import concurrent.futures
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
+
+logger = logging.getLogger("TriageAgent")
 
 from src.core.schemas import (
     ParsedEvent,
@@ -28,13 +33,25 @@ from src.core.schemas import (
 from src.core.state import IncidentState
 from src.agents.prompts import TRIAGE_AGENT_SYSTEM_PROMPT
 from src.tools.threat_intel import ThreatIntelTools
+from src.core.security_guard import detect_prompt_injection, wrap_untrusted_log
 
 
 class TriageAgent:
     """
     Detection & Triage Agent đa mô hình (Parallel Ensemble SOC Tier 1).
     Kế thừa và tuân thủ chặt chẽ TRIAGE_AGENT_SYSTEM_PROMPT.
+    Hỗ trợ tích hợp HybridLLMProvider đa tầng vào Model B (LLM CoT Reasoner).
     """
+
+    @staticmethod
+    def _safe_int(val: Any, default: int = 0) -> int:
+        """Chuyển đổi số nguyên an toàn, xử lý triệt để None, chuỗi rác, dash '-'."""
+        if val is None:
+            return default
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return default
 
     def __init__(
         self,
@@ -42,19 +59,247 @@ class TriageAgent:
         weight_heuristic: float = 0.30,
         weight_cot: float = 0.40,
         weight_mitre_ioc: float = 0.30,
+        llm_provider: Optional[Any] = None,
+        llm_enabled: bool = True,
+        enable_tiered_routing: bool = True,
+        fast_triage_max_level: int = 7,
     ):
         self.system_prompt = system_prompt or TRIAGE_AGENT_SYSTEM_PROMPT
         self.name = "DetectionAndTriageAgent"
         self.weight_heuristic = weight_heuristic
         self.weight_cot = weight_cot
         self.weight_mitre_ioc = weight_mitre_ioc
+        # UPGRADE: LLM Integration
+        self.llm_provider = llm_provider
+        self.llm_enabled = llm_enabled
+        # UPGRADE: Tiered Routing (Hạn chế 4: Tối ưu chi phí Token & Giảm độ trễ)
+        self.enable_tiered_routing = enable_tiered_routing
+        self.fast_triage_max_level = fast_triage_max_level
+        # Nạp hồ sơ huấn luyện từ Public Datasets (Mordor/OTRF) nếu tồn tại
+        self.trained_profiles: Dict[str, Any] = self._load_trained_profiles()
+
+    @staticmethod
+    def _load_trained_profiles() -> Dict[str, Any]:
+        """Tự động nạp file data/models/trained_log_profiles.json nếu tồn tại."""
+        candidate_paths = [
+            os.path.join("data", "models", "trained_log_profiles.json"),
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "data",
+                "models",
+                "trained_log_profiles.json",
+            ),
+        ]
+        for path in candidate_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if isinstance(data, dict):
+                            return data
+                except Exception as ex:
+                    logger.debug(f"[TriageAgent] Không thể nạp trained_log_profiles.json: {ex}")
+        return {}
+
+    @staticmethod
+    def _sanitize_for_prompt(value: Any, max_len: int = 200) -> str:
+        """
+        Làm sạch chuỗi trước khi ghép vào LLM prompt (chống Prompt Injection - Finding H1):
+        - Loại bỏ ký tự xuống dòng (\\r, \\n, \\t) và các ký tự điều khiển (\\x00-\\x1f, \\x7f).
+        - Cắt chuỗi tối đa max_len ký tự.
+        """
+        if value is None:
+            return "N/A"
+        text = str(value)
+        text = re.sub(r"[\r\n\t\x00-\x1f\x7f]+", " ", text).strip()
+        if not text:
+            return "N/A"
+        return text[:max_len]
+
+    def _check_trained_profile_match(self, evt: ParsedEvent, combined_cmd: str, desc_lower: str) -> Tuple[bool, float, str]:
+        """
+        Đối chiếu sự kiện với hồ sơ hành vi đã huấn luyện (self.trained_profiles)
+        và các mẫu chữ ký tấn công thực tế từ bộ dữ liệu công khai Mordor/OTRF.
+        """
+        if not self.trained_profiles:
+            self.trained_profiles = self._load_trained_profiles()
+
+        evt_id_str = str(evt.event_id or "").strip()
+        win_eid_str = str(
+            evt.raw_attributes.get("event_id")
+            or evt.raw_attributes.get("win_event_id")
+            or evt.raw_attributes.get("eventID")
+            or ""
+        ).strip()
+
+        # Các dấu hiệu đặc trưng học từ Mordor/OTRF Dataset
+        mordor_high_risk_eids = {"1102", "4104"}
+        mordor_keywords = [
+            "sharpview",
+            "promptforcreds",
+            "httplistener",
+            "audit log cleared",
+            "eventlog cleared",
+        ]
+
+        # Mở rộng từ self.trained_profiles nếu file đã được nạp
+        profile_eids = set(mordor_high_risk_eids)
+        profile_keywords = list(mordor_keywords)
+
+        if isinstance(self.trained_profiles, dict):
+            candidate_dicts = [self.trained_profiles]
+            for v in self.trained_profiles.values():
+                if isinstance(v, dict):
+                    candidate_dicts.append(v)
+
+            for d in candidate_dicts:
+                for key in ("high_risk_event_ids", "suspicious_event_ids", "mordor_event_ids", "event_ids", "top_event_ids"):
+                    val = d.get(key)
+                    if isinstance(val, (list, dict)):
+                        items = val.keys() if isinstance(val, dict) else val
+                        profile_eids.update(str(x).strip() for x in items if str(x).strip() not in {"4624", "60100"})
+
+                for key in ("attack_keywords", "suspicious_keywords", "keywords", "signatures", "command_patterns", "malicious_tokens"):
+                    val = d.get(key)
+                    if isinstance(val, (list, dict)):
+                        items = val.keys() if isinstance(val, dict) else val
+                        for kw in items:
+                            kw_s = str(kw).strip().lower()
+                            if len(kw_s) >= 5 and kw_s not in profile_keywords:
+                                profile_keywords.append(kw_s)
+
+        search_blob = " ".join([
+            combined_cmd,
+            desc_lower,
+            (evt.process_name or "").lower(),
+            (evt.process_path or "").lower(),
+            str(evt.raw_attributes.get("full_log", "")).lower(),
+        ])
+
+        if evt_id_str in profile_eids or win_eid_str in profile_eids:
+            matched_eid = evt_id_str if evt_id_str in profile_eids else win_eid_str
+            bonus = 45.0 if matched_eid in {"1102", "4104"} else 30.0
+            return (
+                True,
+                bonus,
+                f"Khớp mẫu hành vi tấn công đã huấn luyện từ Public Dataset (Mordor/OTRF - EventID {matched_eid})",
+            )
+
+        for kw in profile_keywords:
+            if kw and kw in search_blob:
+                bonus = 40.0 if kw in mordor_keywords else 25.0
+                return (
+                    True,
+                    bonus,
+                    f"Khớp mẫu hành vi tấn công đã huấn luyện từ Public Dataset (Mordor/OTRF - '{kw}')",
+                )
+
+        return False, 0.0, ""
 
     # =====================================================================
-    # 1. MODEL A: HEURISTIC RULE EVALUATOR
+    # TIERED ROUTING: FAST TRIAGE ELIGIBILITY CHECK
+    # =====================================================================
+    def is_eligible_for_fast_triage(
+        self,
+        events_or_state: Union[List[ParsedEvent], ParsedEvent, IncidentState, Any]
+    ) -> bool:
+        """
+        Kiểm tra sự kiện có đủ điều kiện đi theo luồng Phân tầng nhanh (Tiered Fast Triage) hay không.
+        Khắc phục Hạn chế 4: Tối ưu chi phí Token, giảm độ trễ qua Tiered Routing.
+
+        Tiêu chí thẩm định:
+        1. Wazuh rule level thấp (Level < fast_triage_max_level, mặc định < 7).
+        2. Không chứa chuỗi obfuscation hoặc download cradle nguy hiểm (Base64, -enc, downloadstring, iex, v.v.).
+        3. Không có IoC bất thường (không có IP public ngoại lai, không có mã băm hoặc chỉ số độc hại).
+        4. Phân loại sơ bộ từ Heuristic Model là Benign (is_incident == False).
+        """
+        if isinstance(events_or_state, IncidentState):
+            events = events_or_state.parsed_events
+        elif isinstance(events_or_state, list):
+            events = events_or_state
+        elif isinstance(events_or_state, ParsedEvent):
+            events = [events_or_state]
+        else:
+            return False
+
+        if not events:
+            return True
+
+        # 1. Kiểm tra Wazuh rule level: Toàn bộ phải < fast_triage_max_level (mặc định 7)
+        for evt in events:
+            lvl = int(evt.raw_attributes.get("wazuh_rule_level", 0))
+            if lvl >= self.fast_triage_max_level:
+                return False
+
+        # 2. Kiểm tra chuỗi obfuscation nguy hiểm hoặc command patterns độc hại
+        dangerous_keywords = [
+            "-enc", "encodedcommand", "downloadstring", "webclient", "iex",
+            "frombase64string", "invoke-expression", "schtasks", "certutil",
+            "bitsadmin", "meterpreter", "reverse shell", "c2", "trojan",
+            "payload.exe", "payload.ps1", "promptforcreds", "sharpview",
+            "audit log cleared", "eventlog cleared", "mimikatz"
+        ]
+        for evt in events:
+            if "encoded_payload" in evt.raw_attributes or "decoded_command" in evt.raw_attributes:
+                return False
+
+            cmd = (evt.command_line or "").lower()
+            decoded_cmd = (evt.raw_attributes.get("decoded_command") or "").lower()
+            combined_cmd = f"{cmd} {decoded_cmd}"
+
+            if any(kw in combined_cmd for kw in dangerous_keywords):
+                return False
+
+            proc = (evt.process_name or "").lower()
+            if any(kw in proc for kw in ["powershell", "cmd.exe", "cscript", "wscript", "mshta", "rundll32"]):
+                if int(evt.raw_attributes.get("wazuh_rule_level", 0)) >= 5:
+                    return False
+
+        # 3. Kiểm tra IoC bất thường
+        for evt in events:
+            if evt.dest_ip:
+                try:
+                    ip_obj = ipaddress.ip_address(evt.dest_ip)
+                    if not (ip_obj.is_private or ip_obj.is_loopback):
+                        return False
+                except ValueError:
+                    pass
+
+            prelim_iocs = evt.raw_attributes.get("preliminary_iocs", [])
+            for ioc in prelim_iocs:
+                if ioc.get("is_public") is True or ioc.get("is_malicious") is True:
+                    return False
+
+            if evt.file_hash:
+                return False
+
+            groups = [g.lower() for g in evt.raw_attributes.get("wazuh_groups", [])]
+            if any(g in groups for g in [
+                "malware", "c2", "reconnaissance", "port_scan",
+                "web_attack", "authentication_failed", "attack"
+            ]):
+                return False
+
+            mitre_ids = evt.raw_attributes.get("wazuh_mitre_ids", [])
+            if mitre_ids:
+                return False
+
+        # 4. Phân loại sơ bộ từ Heuristic Model A là Benign
+        res_a = self._evaluate_heuristic(events)
+        if res_a.get("is_incident", True):
+            return False
+        if res_a.get("score", 0.0) >= 30.0:
+            return False
+
+        return True
+
+    # =====================================================================
+    # 1. MODEL A: HEURISTIC RULE & BEHAVIORAL ML EVALUATOR
     # =====================================================================
     def _evaluate_heuristic(self, events: List[ParsedEvent]) -> Dict[str, Any]:
         """
-        Model A: Đánh giá dựa trên heuristic rules, Wazuh rule level và các signature nguy hiểm.
+        Model A: Đánh giá dựa trên heuristic rules, Wazuh rule level, các signature nguy hiểm
+        và hồ sơ hành vi tấn công đã huấn luyện (trained_log_profiles.json).
         """
         if not events:
             return {
@@ -63,11 +308,12 @@ class TriageAgent:
                 "confidence_score": 0.5,
                 "severity": SeverityLevel.LOW,
                 "score": 0.0,
+                "anomaly_score": 0.0,
+                "reasons": [],
                 "rationale": "Không có sự kiện nào được ghi nhận."
             }
 
         max_rule_level = 0
-        rule_descriptions = []
         is_all_routine_benign = True
         threat_score = 0.0
         triggers: List[str] = []
@@ -77,7 +323,6 @@ class TriageAgent:
             rule_id = str(evt.raw_attributes.get("wazuh_rule_id", ""))
             groups = [g.lower() for g in evt.raw_attributes.get("wazuh_groups", [])]
             desc = evt.raw_attributes.get("wazuh_rule_description", "")
-            rule_descriptions.append(desc)
 
             if level > max_rule_level:
                 max_rule_level = level
@@ -129,6 +374,16 @@ class TriageAgent:
             elif level >= 5:
                 threat_score += 10.0
 
+            # Kiểm tra bổ sung với Hồ sơ Huấn luyện từ Public Dataset (trained_log_profiles.json / Mordor)
+            matched_profile, profile_bonus, profile_reason = self._check_trained_profile_match(
+                evt, combined_cmd, desc.lower()
+            )
+            if matched_profile:
+                if threat_score < 75.0:
+                    threat_score = min(95.0, max(threat_score + profile_bonus, 75.0))
+                if profile_reason not in triggers:
+                    triggers.append(profile_reason)
+
         # Kết luận của Heuristic Model
         if is_all_routine_benign and threat_score == 0:
             return {
@@ -137,6 +392,8 @@ class TriageAgent:
                 "confidence_score": 0.90,
                 "severity": SeverityLevel.LOW,
                 "score": 10.0,
+                "anomaly_score": 10.0,
+                "reasons": list(triggers),
                 "rationale": "Toàn bộ sự kiện trùng khớp với hành vi người dùng thường nhật hợp lệ (False Positive)."
             }
 
@@ -160,8 +417,14 @@ class TriageAgent:
             "confidence_score": round(confidence, 2),
             "severity": sev,
             "score": normalized_score,
-            "rationale": f"Heuristic kích hoạt các cảnh báo: {'; '.join(triggers[:3])} (Max Rule Level: {max_rule_level})."
+            "anomaly_score": normalized_score,
+            "reasons": list(triggers),
+            "rationale": f"Heuristic kích hoạt các cảnh báo: {'; '.join(triggers[:5])} (Max Rule Level: {max_rule_level})."
         }
+
+    def _evaluate_behavioral_ml(self, events: List[ParsedEvent]) -> Dict[str, Any]:
+        """Model A Behavioral ML & Heuristic Evaluator (kết hợp trained_log_profiles.json)."""
+        return self._evaluate_heuristic(events)
 
     # =====================================================================
     # 2. MODEL B: LLM CHAIN-OF-THOUGHT (CoT) REASONER
@@ -277,7 +540,7 @@ class TriageAgent:
         conf = 0.95 if (is_inc and risk_score >= 80) or (not is_inc and risk_score <= 15) else 0.85
         conclusion_text = f"Kết luận CoT: Xác nhận {'SỰ CỐ AN NINH (True Positive)' if is_inc else 'HOẠT ĐỘNG THƯỜNG NHẬT (False Positive)'} với độ tin cậy {conf*100:.0f}%, mức độ {sev.value}."
 
-        return {
+        fast_result = {
             "model": "Model-B-LLM-CoT",
             "is_incident": is_inc,
             "confidence_score": conf,
@@ -291,6 +554,173 @@ class TriageAgent:
             },
             "rationale": f"[CoT 4-Step Analysis] {conclusion_text} {risk_rationale}"
         }
+
+        # TIERED ROUTING: Nếu alert đủ điều kiện fast triage, tuyệt đối không gọi LLM Cloud (tiết kiệm 100% token)
+        if self.enable_tiered_routing and self.is_eligible_for_fast_triage(events):
+            return fast_result
+
+        # UPGRADE: Nếu sự kiện không thuộc các mẫu rõ ràng (Unfamiliar/OOD Event) hoặc có llm_provider,
+        # kích hoạt phân tích ngữ nghĩa sâu từ HybridLLMProvider (OmniRouter/OpenRouter/Ollama/Deterministic)
+        is_clear_pattern = (
+            (is_routine_session and not (has_powershell or has_decoded_cmd or has_external_conn or has_scan or has_auth_anomaly))
+            or (has_powershell and has_decoded_cmd and has_external_conn)
+            or (has_auth_anomaly and max_level >= 10)
+            or (has_scan and max_level >= 7)
+        )
+
+        if self.llm_enabled and (not is_clear_pattern or self.llm_provider is not None):
+            llm_result = self._call_llm_for_triage(events, fast_result)
+            if llm_result:
+                return llm_result
+
+        return fast_result
+
+    def _call_llm_for_triage(
+        self,
+        events: List[ParsedEvent],
+        heuristic_context: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        UPGRADE: Gọi HybridLLMProvider (OmniRouter/Ollama/Deterministic) để phân tích
+        sự kiện bảo mật lạ không có trong kịch bản mẫu bằng ngữ cảnh CoT 4 bước.
+        """
+        if not self.llm_enabled:
+            return None
+
+        try:
+            # Lazy import HybridLLMProvider nếu chưa được truyền vào
+            if self.llm_provider is None:
+                from src.copilot.llm_provider import HybridLLMProvider
+                self.llm_provider = HybridLLMProvider()
+
+            # 1. Quét Indirect Prompt Injection trong toàn bộ sự kiện đầu vào
+            injection_reasons = []
+            for e in events:
+                raw_attrs = e.raw_attributes or {}
+                for check_text in (e.command_line, raw_attrs.get("wazuh_rule_description"), raw_attrs.get("decoded_command")):
+                    if check_text:
+                        is_inj, reason = detect_prompt_injection(str(check_text))
+                        if is_inj:
+                            injection_reasons.append(reason)
+                            break
+
+            # Nếu phát hiện ý đồ thao túng mô hình ngôn ngữ (Jailbreak / Evasion)
+            if injection_reasons:
+                logger.warning(f"🚨 Phát hiện Indirect Prompt Injection trong sự kiện: {'; '.join(injection_reasons)}")
+                return {
+                    "model": "Model-B-LLM-CoT-Guard",
+                    "is_incident": True,
+                    "confidence_score": 0.99,
+                    "severity": SeverityLevel.CRITICAL,
+                    "score": 95.0,
+                    "attack_category": AttackCategory.MALWARE,
+                    "attack_type": "Indirect Prompt Injection & Defense Evasion Attack",
+                    "cot_steps": {
+                        "observation": f"Phát hiện mẫu lệnh thao túng mô hình AI trong log: {'; '.join(injection_reasons)}",
+                        "contextualization": "Kẻ tấn công cố gắng đánh lừa hệ thống Triage tự động gán nhãn False Positive / Benign.",
+                        "risk_scoring": "Mức độ cực kỳ nguy hiểm (CRITICAL - 95.0) do có chủ đích che giấu dấu vết tấn công.",
+                        "conclusion": "Xác nhận sự cố an ninh nghiêm trọng (True Positive) kết hợp hành vi phòng thủ đối kháng (Adversarial AI Attack)."
+                    },
+                    "rationale": f"Phát hiện Prompt Injection trong log: {'; '.join(injection_reasons)}"
+                }
+
+            event_summaries = []
+            for i, e in enumerate(events[:10], 1):
+                raw_attrs = e.raw_attributes or {}
+                rule_lvl = self._sanitize_for_prompt(raw_attrs.get("wazuh_rule_level", "N/A"), max_len=32)
+                rule_desc = self._sanitize_for_prompt(raw_attrs.get("wazuh_rule_description", ""), max_len=200)
+                groups = raw_attrs.get("wazuh_groups", [])
+                mitre = raw_attrs.get("wazuh_mitre_ids", [])
+                src_type = self._sanitize_for_prompt(e.source_type, max_len=100)
+                evt_id = self._sanitize_for_prompt(e.event_id, max_len=100)
+                host_name = self._sanitize_for_prompt(e.host_name or "N/A", max_len=100)
+                user_name = self._sanitize_for_prompt(e.user_name or "N/A", max_len=100)
+                proc_name = self._sanitize_for_prompt(e.process_name or "N/A", max_len=150)
+                proc_path = self._sanitize_for_prompt(e.process_path or "N/A", max_len=200)
+                cmd_line = wrap_untrusted_log(self._sanitize_for_prompt(e.command_line or "N/A", max_len=200))
+                parent_proc = self._sanitize_for_prompt(e.parent_process or "N/A", max_len=150)
+                summary_parts = [
+                    f"Event #{i}: Source={src_type}, EventID={evt_id}",
+                    f"Host={host_name}, User={user_name}",
+                    f"Process={proc_name} (Path: {proc_path})",
+                    f"CommandLine={cmd_line}",
+                    f"ParentProcess={parent_proc}",
+                    f"Net: {e.source_ip}:{e.source_port} -> {e.dest_ip}:{e.dest_port}",
+                    f"Rule: Level={rule_lvl}, Desc='{rule_desc}', Groups={groups}, MITRE={mitre}"
+                ]
+                event_summaries.append(" | ".join(summary_parts))
+
+            events_text = "\n".join(event_summaries)
+
+            prompt = (
+                f"Bạn là chuyên viên SOC Tier 1 cao cấp. Hãy thẩm định các sự kiện an ninh mạng sau:\n\n"
+                f"{events_text}\n\n"
+                f"Thực hiện suy luận Chain-of-Thought (CoT) 4 bước:\n"
+                f"1. Observation: Liệt kê các hành vi, tiến trình, kết nối mạng bất thường.\n"
+                f"2. Contextualization: Đánh giá bối cảnh quản trị hay dấu hiệu xâm nhập.\n"
+                f"3. Risk Scoring: Chấm điểm rủi ro từ 0 đến 100 và xác định mức (LOW, MEDIUM, HIGH, CRITICAL).\n"
+                f"4. Conclusion: Kết luận is_incident (true/false), phân loại loại tấn công (attack_category: MALWARE, CREDENTIAL_ACCESS, RECONNAISSANCE, WEB_ATTACK, PRIVILEGE_ESCALATION, LATERAL_MOVEMENT, BENIGN, UNKNOWN) và attack_type.\n\n"
+                f"HÃY TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON với cấu trúc sau:\n"
+                f"{{\n"
+                f'  "is_incident": true,\n'
+                f'  "confidence_score": 0.95,\n'
+                f'  "severity": "HIGH",\n'
+                f'  "score": 80.0,\n'
+                f'  "attack_category": "MALWARE",\n'
+                f'  "attack_type": "Tên loại tấn công",\n'
+                f'  "cot_steps": {{\n'
+                f'    "observation": "...",\n'
+                f'    "contextualization": "...",\n'
+                f'    "risk_scoring": "...",\n'
+                f'    "conclusion": "..."\n'
+                f'  }},\n'
+                f'  "rationale": "Tóm tắt lý do kết luận"\n'
+                f"}}"
+            )
+
+            raw_response = self.llm_provider.generate_response(
+                prompt=prompt,
+                system_prompt=self.system_prompt
+            )
+
+            if not raw_response or not isinstance(raw_response, str):
+                return None
+
+            json_text = raw_response.strip()
+            if "```" in json_text:
+                m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", json_text, re.DOTALL)
+                if m:
+                    json_text = m.group(1)
+
+            parsed = json.loads(json_text)
+            if not isinstance(parsed, dict) or "is_incident" not in parsed:
+                return None
+
+            sev_val = str(parsed.get("severity", "MEDIUM")).upper()
+            try:
+                severity = SeverityLevel(sev_val)
+            except Exception:
+                severity = SeverityLevel.MEDIUM
+
+            raw_conf = float(parsed.get("confidence_score", 0.85))
+            clamped_conf = max(0.0, min(1.0, raw_conf))
+            raw_score = float(parsed.get("score", 50.0))
+            clamped_score = max(0.0, min(100.0, raw_score))
+
+            return {
+                "model": "Model-B-LLM-CoT",
+                "is_incident": bool(parsed.get("is_incident", False)),
+                "confidence_score": clamped_conf,
+                "severity": severity,
+                "score": clamped_score,
+                "attack_category": parsed.get("attack_category"),
+                "attack_type": parsed.get("attack_type"),
+                "cot_steps": parsed.get("cot_steps", {}),
+                "rationale": str(parsed.get("rationale") or parsed.get("cot_steps", {}).get("conclusion", "Phân tích suy luận từ LLM."))
+            }
+        except Exception as ex:
+            logger.debug(f"[TriageAgent] LLM analysis fallback: {ex}")
+            return None
 
     # =====================================================================
     # 3. MODEL C: MITRE & IOC THREAT EVALUATOR
@@ -312,7 +742,6 @@ class TriageAgent:
         mitre_ids = set()
         malicious_iocs = []
         suspicious_public_ips = set()
-        tactics_detected = set()
 
         # Ánh xạ kỹ thuật có trọng số nguy hiểm
         high_risk_techniques = {"T1059.001", "T1027", "T1105", "T1071.001", "T1053.005", "T1078.002", "T1110.003"}
@@ -330,8 +759,6 @@ class TriageAgent:
                 matches = ThreatIntelTools.match_mitre_technique(cmd_full)
                 for m in matches:
                     mitre_ids.add(m.get("mitre_id"))
-                    if m.get("tactic"):
-                        tactics_detected.add(m.get("tactic"))
 
             # Kiểm tra IoC từ prelim IoCs hoặc IP kết nối
             prelim_iocs = evt.raw_attributes.get("preliminary_iocs", [])
@@ -383,8 +810,8 @@ class TriageAgent:
             sev = SeverityLevel.LOW
 
         confidence = 0.92 if malicious_iocs or len(matched_high) >= 2 else 0.85
-
-        rationale = f"MITRE phát hiện {len(mitre_ids)} kỹ thuật ({', '.join(sorted(mitre_ids))}). "
+        clean_mitre_ids = sorted([str(m).strip() for m in mitre_ids if m and str(m).strip()])
+        rationale = f"MITRE phát hiện {len(clean_mitre_ids)} kỹ thuật ({', '.join(clean_mitre_ids)}). "
         if malicious_iocs:
             rationale += f"Xác nhận {len(malicious_iocs)} IoC độc hại từ CTI: {[i.value for i in malicious_iocs]}."
         elif suspicious_public_ips:
@@ -405,9 +832,50 @@ class TriageAgent:
     # =====================================================================
     def evaluate_models_parallel(self, events: List[ParsedEvent]) -> Dict[str, Any]:
         """
-        Thực thi đồng thời Model A, Model B, Model C trên ThreadPoolExecutor
-        và trả về kết quả từng mô hình kèm kết quả đồng thuận (Consensus).
+        Thực thi đánh giá sự kiện:
+        - Nếu bật Tiered Routing và sự kiện đủ điều kiện Fast Triage (Level < 7, Benign, không IoC/obfuscation):
+          Short-circuit đánh giá Heuristic ngay lập tức, bỏ qua gọi LLM Cloud đắt đỏ (tiết kiệm 100% token).
+        - Ngược lại, thực thi đồng thời Model A, Model B, Model C trên ThreadPoolExecutor.
         """
+        if self.enable_tiered_routing and self.is_eligible_for_fast_triage(events):
+            res_a = self._evaluate_heuristic(events)
+            res_b = {
+                "model": "Model-B-LLM-CoT",
+                "is_incident": False,
+                "confidence_score": res_a.get("confidence_score", 0.90),
+                "severity": SeverityLevel.LOW,
+                "score": res_a.get("score", 10.0),
+                "cot_steps": {
+                    "observation": "Tiered Routing: Cảnh báo mức thấp thường nhật, không có dấu hiệu bất thường.",
+                    "contextualization": "Hoạt động đăng nhập quản trị thông thường trong mạng nội bộ.",
+                    "risk_scoring": "Điểm rủi ro: 10/100 (LOW).",
+                    "conclusion": "Kết luận: HOẠT ĐỘNG THƯỜNG NHẬT (False Positive) - Short-circuit qua Tiered Routing (0 Token LLM)."
+                },
+                "rationale": "[Tiered Routing Fast Path] Short-circuit đánh giá Heuristic, bỏ qua LLM Cloud để tiết kiệm token."
+            }
+            res_c = {
+                "model": "Model-C-MITRE-IoC",
+                "is_incident": False,
+                "confidence_score": 0.95,
+                "severity": SeverityLevel.LOW,
+                "score": 5.0,
+                "mitre_techniques": [],
+                "rationale": "Không phát hiện kỹ thuật MITRE ATT&CK hoặc IoC độc hại nào liên quan."
+            }
+            consensus = self._calculate_consensus(res_a, res_b, res_c, events)
+            return {
+                "model_a": res_a,
+                "model_b": res_b,
+                "model_c": res_c,
+                "consensus": consensus,
+                "tiered_routing": {
+                    "applied": True,
+                    "tier": "fast_heuristic",
+                    "tokens_saved": True,
+                    "llm_called": False
+                }
+            }
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_a = executor.submit(self._evaluate_heuristic, events)
             future_b = executor.submit(self._evaluate_llm_cot, events)
@@ -424,7 +892,13 @@ class TriageAgent:
             "model_a": res_a,
             "model_b": res_b,
             "model_c": res_c,
-            "consensus": consensus
+            "consensus": consensus,
+            "tiered_routing": {
+                "applied": False,
+                "tier": "full_ensemble",
+                "tokens_saved": False,
+                "llm_called": bool(self.llm_enabled and self.llm_provider is not None)
+            }
         }
 
     def _calculate_consensus(
@@ -579,6 +1053,14 @@ class TriageAgent:
                 attack_category = AttackCategory.WEB_ATTACK
                 attack_type = "Exploit Public-Facing Web Application"
                 primary_mitre_tactics = ["Initial Access", "Execution"]
+            elif res_b.get("attack_category"):
+                llm_cat_str = str(res_b.get("attack_category")).upper()
+                try:
+                    attack_category = AttackCategory(llm_cat_str)
+                except Exception:
+                    attack_category = AttackCategory.UNKNOWN
+                attack_type = res_b.get("attack_type") or "Unclassified Security Incident"
+                primary_mitre_tactics = ["Execution", "Initial Access"]
             else:
                 attack_category = AttackCategory.MALWARE
                 attack_type = "Endpoint Malware & C2 Reverse Shell"
@@ -612,16 +1094,23 @@ class TriageAgent:
         state.triage_result = triage_output
         state.attack_type = triage_output.attack_type
         target_status = IncidentStatus.TRIAGED if triage_output.is_incident else IncidentStatus.CLOSED_FALSE_POSITIVE
+        
+        transition_meta = {
+            "confidence": triage_output.confidence_score,
+            "severity": triage_output.severity.value,
+            "model": triage_output.rule_or_model
+        }
+        if results.get("tiered_routing", {}).get("applied"):
+            transition_meta["tiered_routing"] = "fast_heuristic"
+            transition_meta["llm_called"] = False
+            transition_meta["tokens_used"] = 0
+
         if hasattr(state, "record_transition"):
             state.record_transition(
                 node="DetectionAndTriageAgent",
                 to_status=target_status,
                 message=f"Triage: {'Sự cố an ninh (True Positive)' if triage_output.is_incident else 'Hoạt động thường nhật (False Positive)'}",
-                metadata={
-                    "confidence": triage_output.confidence_score,
-                    "severity": triage_output.severity.value,
-                    "model": triage_output.rule_or_model
-                }
+                metadata=transition_meta
             )
         else:
             state.status = target_status
@@ -629,6 +1118,20 @@ class TriageAgent:
 
         return state
 
+    def fast_triage(self, events: List[ParsedEvent]) -> TriageOutput:
+        """
+        Thực thi phân loại nhanh bằng Heuristic (Short-circuit Fast Triage),
+        không gọi LLM Cloud, tiết kiệm 100% token cho cảnh báo thông thường.
+        """
+        results = self.evaluate_models_parallel(events)
+        return results["consensus"]
+
     def process(self, state: IncidentState) -> IncidentState:
         """Alias cho phương thức triage nhằm tương thích quy ước agent.process(state)."""
         return self.triage(state)
+
+    def evaluate(self, events: List[ParsedEvent]) -> TriageOutput:
+        """Đánh giá danh sách ParsedEvent và trả về kết quả đồng thuận TriageOutput."""
+        results = self.evaluate_models_parallel(events)
+        return results["consensus"]
+

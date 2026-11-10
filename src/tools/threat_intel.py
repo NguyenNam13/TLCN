@@ -9,6 +9,7 @@ với cơ chế Caching in-memory, lọc IP Private RFC 1918 và ánh xạ kỹ 
 import os
 import re
 import json
+import base64
 import ipaddress
 import threading
 import urllib.request
@@ -388,11 +389,12 @@ class ThreatIntelTools:
         if not vt_key:
             return None
 
+        url_b64 = base64.urlsafe_b64encode(resource_val.encode("utf-8")).decode("ascii").strip("=")
         endpoint_map = {
             "IP": f"https://www.virustotal.com/api/v3/ip_addresses/{resource_val}",
             "DOMAIN": f"https://www.virustotal.com/api/v3/domains/{resource_val}",
             "HASH": f"https://www.virustotal.com/api/v3/files/{resource_val}",
-            "URL": f"https://www.virustotal.com/api/v3/urls/{urllib.parse.quote(resource_val, safe='')}"
+            "URL": f"https://www.virustotal.com/api/v3/urls/{url_b64}"
         }
         url = endpoint_map.get(resource_type.upper())
         if not url:
@@ -765,10 +767,8 @@ class ThreatIntelTools:
             h_type = "MD5"
         elif len(cleaned_hash) == 40:
             h_type = "SHA1"
-        elif len(cleaned_hash) == 64:
-            h_type = "SHA256"
         else:
-            h_type = "HASH"
+            h_type = "SHA256"
 
         if use_cache:
             cached = cls.get_cached(h_type, cleaned_hash)

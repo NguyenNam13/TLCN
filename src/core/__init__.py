@@ -39,6 +39,7 @@ from src.core.hitl_manager import (
     HITLSessionStore,
 )
 from src.core.incident_store import IncidentStore
+from src.core.security_guard import detect_prompt_injection, wrap_untrusted_log
 
 __all__ = [
     # Schemas
@@ -70,5 +71,8 @@ __all__ = [
     "HITLDecision",
     "HITLManager",
     "HITLSessionStore",
+    # Security Guard
+    "detect_prompt_injection",
+    "wrap_untrusted_log",
 ]
 

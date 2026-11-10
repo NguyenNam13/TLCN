@@ -176,7 +176,4 @@ class WazuhAlertStreamer:
 
     def count(self) -> int:
         """Đếm số lượng cảnh báo thỏa mãn bộ lọc."""
-        count = 0
-        for _ in self.stream_alerts():
-            count += 1
-        return count
+        return sum(1 for _ in self.stream_alerts())

@@ -6,11 +6,8 @@ cho hệ thống SOC Multi-Agent trên Streamlit Dashboard.
 Đề tài Khóa luận Tốt nghiệp TLCN-NAM.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from pathlib import Path
-import html
-import json
-import streamlit as st
 import streamlit.components.v1 as components
 
 from src.core.state import IncidentState
@@ -116,17 +113,32 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
     edge_ing_tri = edge_attr(st_ingestion, "#10b981", "arrow-green")
     edge_tri_ti = edge_attr(st_triage, "#a855f7", "arrow-purple")
     edge_tri_rca = edge_attr(st_triage, "#ec4899", "arrow-pink")
+    edge_tri_fp = 'stroke="#475569" stroke-width="1.8" stroke-dasharray="6 6" marker-end="url(#arrow-gray)"'
     edge_ti_resp = edge_attr(st_enrichment, "#a855f7", "arrow-purple")
     edge_rca_resp = edge_attr(st_rca, "#ec4899", "arrow-pink")
     edge_resp_hitl = edge_attr(st_response, "#3b82f6", "arrow-blue")
     edge_hitl_rep = edge_attr(st_hitl, "#10b981", "arrow-green")
     edge_rep_res = edge_attr(st_reporting, "#10b981", "arrow-green")
 
+    # Feedback loop styling
+    has_feedback = (state is not None and getattr(state, "reanalysis_count", 0) > 0)
+    edge_feedback = 'stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arrow-orange)"' if has_feedback else 'stroke="#78350f" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#arrow-orange)"'
+
+    def badge_hitl(st_val: str) -> str:
+        if st_val == "COMPLETED":
+            return '<span class="badge-status badge-completed font-mono">✓ APPROVED</span>'
+        elif st_val == "ACTIVE":
+            return '<span class="badge-status badge-hitl font-mono"><span class="dot-pulse-orange"></span> AWAITING APPROVAL</span>'
+        elif st_val == "SKIPPED":
+            return '<span class="badge-status badge-skipped font-mono">SKIPPED</span>'
+        else:
+            return '<span class="badge-status font-mono" style="background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid #78350f;">HUMAN GATE</span>'
+
     return f"""<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Sơ Đồ SOC Multi-Agent Chạy Song Song</title>
+<title>Sơ Đồ Tiến Trình Điều Phối SOC Multi-Agent (LangGraph StateGraph DAG)</title>
 <style>
     * {{
         box-sizing: border-box;
@@ -189,7 +201,7 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         gap: 6px;
     }}
 
-    /* 3. Ô CARD HITECH (THEO ĐÚNG MẪU NGƯỜI DÙNG GỬI) */
+    /* 3. Ô CARD HITECH */
     .card-node {{
         position: absolute;
         width: 295px;
@@ -205,6 +217,11 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
     }}
     .card-node:hover {{
         transform: translateY(-2px);
+    }}
+    .card-hitl {{
+        border: 1.5px dashed #f59e0b !important;
+        background: rgba(30, 20, 10, 0.85) !important;
+        box-shadow: 0 0 18px rgba(245, 158, 11, 0.15) !important;
     }}
     .icon-container {{
         width: 44px;
@@ -269,6 +286,14 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         align-items: center;
         gap: 4px;
     }}
+    .badge-hitl {{
+        background: rgba(245, 158, 11, 0.25) !important;
+        color: #fde68a !important;
+        border: 1px solid #f59e0b !important;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }}
     .badge-pending {{
         background: rgba(51, 65, 85, 0.3);
         color: #64748b;
@@ -287,6 +312,14 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         box-shadow: 0 0 6px #fbbf24;
         animation: dot-anim 1.2s infinite;
     }}
+    .dot-pulse-orange {{
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #f59e0b;
+        box-shadow: 0 0 6px #f59e0b;
+        animation: dot-anim 1.2s infinite;
+    }}
     @keyframes dot-anim {{
         0% {{ opacity: 0.4; }}
         50% {{ opacity: 1; }}
@@ -294,7 +327,6 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
     }}
 
     /* 5. STYLE VIỀN THEO TIẾN TRÌNH THỰC TẾ */
-    /* 5.1 COMPLETED: Viền xanh lá rực rỡ */
     .state-completed {{
         border: 1.5px solid #10b981;
         box-shadow: 0 0 16px rgba(16, 185, 129, 0.35), 0 6px 18px rgba(0, 0, 0, 0.6);
@@ -305,7 +337,6 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         color: #34d399;
     }}
 
-    /* 5.2 ACTIVE: Viền phát quang nhấp nháy */
     .state-active {{
         border: 1.5px solid #fbbf24;
         animation: active-glow-anim 1.8s infinite alternate;
@@ -326,7 +357,6 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         }}
     }}
 
-    /* 5.3 PENDING: Viền mờ tối giản */
     .state-pending {{
         border: 1px solid #27354a;
         background: rgba(13, 17, 30, 0.7);
@@ -344,7 +374,6 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         color: #475569;
     }}
 
-    /* 5.4 SKIPPED: Viền nét đứt mờ */
     .state-skipped {{
         border: 1.5px dashed #475569;
         background: rgba(15, 23, 42, 0.35);
@@ -376,7 +405,11 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
     .port-in-left {{ left: -5px; background: #38bdf8; }}
     .port-out-right {{ right: -5px; background: #a855f7; }}
     .port-in-right {{ right: -5px; background: #38bdf8; }}
-    .port-out-left {{ left: -5px; background: #a855f7; }}
+    .port-out-left {{ left: -5px; background: #10b981; }}
+    .port-in-top {{ top: -5px; left: 50%; transform: translateX(-50%); background: #38bdf8; }}
+    .port-in-bottom {{ bottom: -5px; left: 50%; transform: translateX(-50%); background: #38bdf8; }}
+    .port-out-bottom {{ bottom: -5px; left: 50%; transform: translateX(-50%); background: #a855f7; }}
+    .port-out-top {{ top: -5px; left: 50%; transform: translateX(-50%); background: #f59e0b; }}
 
     /* SVG LINES */
     .svg-layer {{
@@ -405,7 +438,7 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
 <body>
 
 <div class="workflow-canvas">
-    <!-- KHUNG SONG SONG -->
+    <!-- KHUNG SONG SONG THREAT INTEL & RCA -->
     <div class="parallel-frame">
         <div class="frame-title font-mono">⚡ PARALLEL AGENTS (Song song)</div>
     </div>
@@ -416,9 +449,6 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
             <marker id="arrow-green" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M 0 1 L 8 5 L 0 9 z" fill="#10b981" />
             </marker>
-            <marker id="arrow-cyan" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 1 L 8 5 L 0 9 z" fill="#38bdf8" />
-            </marker>
             <marker id="arrow-purple" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M 0 1 L 8 5 L 0 9 z" fill="#a855f7" />
             </marker>
@@ -427,6 +457,9 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
             </marker>
             <marker id="arrow-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M 0 1 L 8 5 L 0 9 z" fill="#3b82f6" />
+            </marker>
+            <marker id="arrow-orange" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 8 5 L 0 9 z" fill="#f59e0b" />
             </marker>
             <marker id="arrow-gray" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M 0 1 L 8 5 L 0 9 z" fill="#475569" />
@@ -439,38 +472,39 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         <!-- 2. Ingestion -> Triage -->
         <path d="M 665 89 L 715 89" {edge_ing_tri} fill="none" />
         
-        <!-- 3. Triage -> Threat Intel (Upper branch) -->
+        <!-- 3. Triage -> Threat Intel CTI (Nhánh song song trên) -->
         <path d="M 1010 89 C 1045 89, 1045 62, 1072 62" {edge_tri_ti} fill="none" />
         
-        <!-- 4. Triage -> RCA (Lower branch) -->
+        <!-- 4. Triage -> RCA (Nhánh song song dưới) -->
         <path d="M 1010 89 C 1045 89, 1045 162, 1072 162" {edge_tri_rca} fill="none" />
         
-        <!-- 5. Triage -> False Positive (Dashed line down to closed_fp) -->
-        <path d="M 862 128 L 862 390" stroke="#475569" stroke-width="1.8" stroke-dasharray="6 6" fill="none" marker-end="url(#arrow-gray)" />
+        <!-- 5. Triage -> False Positive (Dashed line thẳng xuống closed_fp, kết thúc độc lập tại Stage 2) -->
+        <path d="M 862 128 L 862 165" {edge_tri_fp} fill="none" />
         
-        <!-- 6. Threat Intel -> Response (Converge) -->
+        <!-- 6. Threat Intel CTI -> Response Agent (Hội tụ / Fan-in) -->
         <path d="M 1367 62 C 1405 62, 1405 312, 1367 312" {edge_ti_resp} fill="none" />
         
-        <!-- 7. RCA -> Response (Converge) -->
+        <!-- 7. RCA -> Response Agent (Hội tụ / Fan-in) -->
         <path d="M 1367 162 C 1390 162, 1390 326, 1367 326" {edge_rca_resp} fill="none" />
         
-        <!-- 8. Response -> HITL Approval -->
+        <!-- 8. Response Agent -> HITL Approval Gate -->
         <path d="M 1072 319 L 1010 319" {edge_resp_hitl} fill="none" />
         
-        <!-- 9. HITL Approval -> Reporting -->
+        <!-- 9. HITL Approval Gate -> Reporting Agent (Duyệt) -->
         <path d="M 715 319 L 665 319" {edge_hitl_rep} fill="none" />
+
+        <!-- 10. FEEDBACK LOOP: HITL Approval Gate -> Response Agent (Quay lui khi Từ chối/Hiệu chỉnh) -->
+        <path d="M 920 358 C 920 415, 1180 415, 1180 358" {edge_feedback} fill="none" />
         
-        <!-- 10. Reporting -> Resolved -->
+        <!-- 11. Reporting Agent -> Hoàn tất: RESOLVED -->
         <path d="M 370 319 L 320 319" {edge_rep_res} fill="none" />
-        
-        <!-- 11. False Positive -> Resolved (Dashed return) -->
-        <path d="M 715 429 C 450 429, 172 400, 172 358" stroke="#475569" stroke-width="1.8" stroke-dasharray="6 6" fill="none" marker-end="url(#arrow-gray)" />
     </svg>
 
-    <!-- NHÃN RẼ NHÁNH -->
+    <!-- NHÃN RẼ NHÁNH VÀ KẾT NỐI -->
     <div class="edge-badge font-mono" style="left: 1040px; top: 110px; color: #38bdf8; border: 1px solid #0284c7;">⚡ True Positive</div>
-    <div class="edge-badge font-mono" style="left: 862px; top: 250px; color: #64748b; border: 1px dashed #475569;">False Positive</div>
+    <div class="edge-badge font-mono" style="left: 862px; top: 146px; color: #94a3b8; border: 1px dashed #475569;">False Positive (Short-circuit)</div>
     <div class="edge-badge font-mono" style="left: 690px; top: 295px; color: #34d399; border: 1px solid #059669; font-size: 9px; padding: 1px 5px;">Duyệt ✓</div>
+    <div class="edge-badge font-mono" style="left: 1050px; top: 415px; color: #fbbf24; border: 1px dashed #f59e0b; font-size: 9px; padding: 2px 6px;">Từ chối / Hiệu chỉnh ↺ (Feedback Loop)</div>
 
     <!-- CÁC THẺ CARD -->
     <!-- 0. START -->
@@ -512,9 +546,10 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
             <div class="subtitle">Parallel 3-Model Ensemble</div>
         </div>
         <div class="port port-out-right"></div>
+        <div class="port port-out-bottom"></div>
     </div>
 
-    <!-- 3. THREAT INTEL CTI -->
+    <!-- 3. THREAT INTEL CTI (NHÁNH SONG SONG TRÊN) -->
     <div class="card-node {cls(st_enrichment)}" style="left: 1072px; top: 23px;">
         <div class="port port-in-left"></div>
         <div class="icon-container">🌐</div>
@@ -523,12 +558,12 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
                 <span class="title">3. Threat Intel CTI</span>
                 {badge(st_enrichment)}
             </div>
-            <div class="subtitle">VirusTotal + AbuseIPDB RAG</div>
+            <div class="subtitle">VirusTotal + AbuseIPDB CTI</div>
         </div>
         <div class="port port-out-right"></div>
     </div>
 
-    <!-- 4. ROOT CAUSE ANALYSIS -->
+    <!-- 4. ROOT CAUSE ANALYSIS (NHÁNH SONG SONG DƯỚI) -->
     <div class="card-node {cls(st_rca)}" style="left: 1072px; top: 123px;">
         <div class="port port-in-left"></div>
         <div class="icon-container">🔬</div>
@@ -542,7 +577,7 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         <div class="port port-out-right"></div>
     </div>
 
-    <!-- 5. RESPONSE AGENT -->
+    <!-- 5. RESPONSE AGENT (ĐIỂM HỘI TỤ FAN-IN) -->
     <div class="card-node {cls(st_response)}" style="left: 1072px; top: 280px;">
         <div class="port port-out-left"></div>
         <div class="icon-container">🛡️</div>
@@ -551,32 +586,34 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
                 <span class="title">5. Response Agent</span>
                 {badge(st_response)}
             </div>
-            <div class="subtitle">NIST SP 800-61 Playbook</div>
+            <div class="subtitle">NIST SP 800-61 & RAG Remediation</div>
         </div>
         <div class="port port-in-right"></div>
+        <div class="port port-in-bottom" style="left: 36%;"></div>
     </div>
 
-    <!-- 6. HITL APPROVAL -->
-    <div class="card-node {cls(st_hitl)}" style="left: 715px; top: 280px;">
+    <!-- 6. CỔNG PHÊ DUYỆT HITL (HUMAN CHECKPOINT) -->
+    <div class="card-node card-hitl {cls(st_hitl)}" style="left: 715px; top: 280px;">
         <div class="port port-in-right"></div>
-        <div class="icon-container">🛑</div>
+        <div class="icon-container" style="color: #f59e0b; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5);">🛑</div>
         <div class="node-text font-mono">
             <div class="title-row">
-                <span class="title">6. HITL Approval Gate</span>
-                {badge(st_hitl)}
+                <span class="title" style="color: #fef3c7;">Cổng Phê duyệt HITL</span>
+                {badge_hitl(st_hitl)}
             </div>
-            <div class="subtitle">Chuyên viên Thẩm định</div>
+            <div class="subtitle" style="color: #fbbf24;">Chuyên viên [Human Checkpoint]</div>
         </div>
         <div class="port port-out-left"></div>
+        <div class="port port-out-bottom" style="left: 70%; background: #f59e0b;"></div>
     </div>
 
-    <!-- 7. REPORTING AGENT -->
+    <!-- 7. REPORTING AGENT (TÁC TỬ THỨ 6) -->
     <div class="card-node {cls(st_reporting)}" style="left: 370px; top: 280px;">
         <div class="port port-in-right"></div>
         <div class="icon-container">📝</div>
         <div class="node-text font-mono">
             <div class="title-row">
-                <span class="title">7. Reporting Agent</span>
+                <span class="title">6. Reporting Agent</span>
                 {badge(st_reporting)}
             </div>
             <div class="subtitle">Báo cáo NIST .docx / MD</div>
@@ -584,7 +621,7 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
         <div class="port port-out-left"></div>
     </div>
 
-    <!-- 8. RESOLVED -->
+    <!-- 8. HOÀN TẤT RESOLVED (TRUE POSITIVE TERMINAL) -->
     <div class="card-node {cls(st_resolved)}" style="left: 25px; top: 280px;">
         <div class="port port-in-right"></div>
         <div class="icon-container">🏁</div>
@@ -593,20 +630,20 @@ def get_parallel_agent_workflow_html(state: Optional[IncidentState] = None) -> s
                 <span class="title">Hoàn tất: RESOLVED</span>
                 {badge(st_resolved)}
             </div>
-            <div class="subtitle">Đã ngăn chặn & Lưu vết</div>
+            <div class="subtitle">Sự cố Đã ngăn chặn & Lưu vết</div>
         </div>
     </div>
 
-    <!-- 9. FALSE POSITIVE -->
-    <div class="card-node {cls(st_fp)}" style="left: 715px; top: 390px;">
-        <div class="port port-in-right"></div>
+    <!-- 9. FALSE POSITIVE TERMINAL (SHORT-CIRCUIT END) -->
+    <div class="card-node {cls(st_fp)}" style="left: 715px; top: 165px;">
+        <div class="port port-in-top"></div>
         <div class="icon-container">📁</div>
         <div class="node-text font-mono">
             <div class="title-row">
                 <span class="title">Đóng: False Positive</span>
                 {badge(st_fp)}
             </div>
-            <div class="subtitle">Lưu vết Audit Log & Đóng</div>
+            <div class="subtitle">Lưu vết Audit Log & Đóng [END]</div>
         </div>
     </div>
 </div>

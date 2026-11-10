@@ -32,19 +32,16 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from src.core.schemas import (
     IncidentStatus,
     SeverityLevel,
-    ActionType,
     RawLogInput,
     IncidentReport,
-    IoCItem,
-    RecommendedAction,
 )
 from src.core.state import IncidentState
-from src.core.time_utils import format_vn_time, to_vn_time
-from src.core.orchestrator import StateGraphOrchestrator, END
+from src.core.time_utils import format_vn_time
+from src.core.orchestrator import StateGraphOrchestrator
 from src.core.hitl_manager import HITLManager
 from src.agents.reporting_agent import ReportingAgent
 from src.core.incident_store import IncidentStore
-from src.tools.wazuh_client import WazuhClientTool
+from src.copilot.engine import SOCCopilotEngine
 from src.ui.components import (
     render_kpi_cards,
     get_kpi_metrics,
@@ -63,6 +60,16 @@ from src.ui.components import (
     apply_hitl_action_decision,
     render_hitech_agent_workflow,
     get_hitech_workflow_html,
+    ROLE_SOC_ANALYST,
+    ROLE_SOC_MANAGER,
+    USER_ROLES,
+    DANGEROUS_ACTIONS,
+    SYSTEM_CRITICAL_PROCESSES,
+    is_dangerous_action,
+    is_critical_system_process,
+    can_user_approve_action,
+    get_action_rbac_warning,
+    get_whitelist_guard_warning,
 )
 
 # Thiết lập cấu hình trang Streamlit
@@ -117,13 +124,11 @@ SCENARIO_CATALOG = {
 
 def resolve_scenario_file_path(file_names: List[str]) -> Optional[str]:
     """
-    Tìm kiếm file kịch bản cảnh báo trong các thư mục data/wazuh_alerts/ hoặc data/raw/wazuh/.
+    Tìm kiếm file kịch bản cảnh báo trong thư mục data/raw/wazuh/.
     """
     candidate_dirs = [
-        os.path.join("data", "wazuh_alerts"),
         os.path.join("data", "raw", "wazuh"),
-        os.path.join("/home/nam/Desktop/TLCN-NAM/TLCN/data/wazuh_alerts"),
-        os.path.join("/home/nam/Desktop/TLCN-NAM/TLCN/data/raw/wazuh"),
+        os.path.join(PROJECT_ROOT, "data", "raw", "wazuh"),
     ]
 
     for fname in file_names:
@@ -132,6 +137,17 @@ def resolve_scenario_file_path(file_names: List[str]) -> Optional[str]:
             if os.path.isfile(p):
                 return p
     return None
+
+
+def _extract_raw_alert_dicts(inc: IncidentState) -> List[Dict[str, Any]]:
+    """Trích xuất danh sách cảnh báo JSON từ raw_logs của IncidentState."""
+    alerts: List[Dict[str, Any]] = []
+    for r in inc.raw_logs:
+        try:
+            alerts.append(json.loads(r.raw_payload))
+        except Exception:
+            pass
+    return alerts
 
 
 def load_scenario_alerts(
@@ -157,7 +173,6 @@ def load_scenario_alerts(
 
     if scenario_key == "live_wazuh":
         try:
-            from src.core.incident_store import IncidentStore
             store = IncidentStore()
             # CHỈ lấy các sự cố thực tế nhận từ Webhook Wazuh Live (prefix INC-WAZUH-)
             # Không lấy nhầm các sự cố từ kịch bản mẫu offline (INC-MALW-, INC-PHIS-,...)
@@ -167,12 +182,7 @@ def load_scenario_alerts(
             ]
             if live_incidents:
                 latest_inc = live_incidents[0]
-                alerts = []
-                for r in latest_inc.raw_logs:
-                    try:
-                        alerts.append(json.loads(r.raw_payload))
-                    except Exception:
-                        pass
+                alerts = _extract_raw_alert_dicts(latest_inc)
                 if alerts:
                     return alerts, f"🔴 Live Wazuh: Sự cố {latest_inc.incident_id} ({latest_inc.attack_type or 'Mới nhận'})"
         except Exception:
@@ -269,138 +279,44 @@ def generate_json_report(report: IncidentReport) -> str:
 
 
 def generate_docx_report(report: IncidentReport) -> bytes:
-    """
-    Sinh tài liệu Word (.docx) chuyên nghiệp từ IncidentReport bằng thư viện python-docx.
-    Tạo tiêu đề, thông tin định danh, Executive Summary, Detailed Findings,
-    bảng IoC và bảng Kế hoạch Phản ứng NIST SP 800-61.
-    """
-    doc = docx.Document()
+    """Ủy thác xuất báo cáo Word .docx về ReportingAgent (Separation of Concerns)."""
+    return ReportingAgent.export_docx(report)
 
-    # Cấu hình lề trang 1 inch
-    for section in doc.sections:
-        section.top_margin = Inches(1)
-        section.bottom_margin = Inches(1)
-        section.left_margin = Inches(1)
-        section.right_margin = Inches(1)
 
-    # 1. Header Khóa luận & Cơ quan điều tra
-    p_header = doc.add_paragraph()
-    p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r_uni = p_header.add_run("TRƯỜNG ĐẠI HỌC SƯ PHẠM KỸ THUẬT TP. HỒ CHÍ MINH (HCMUTE)\n")
-    r_uni.bold = True
-    r_uni.font.size = Pt(13)
-    r_uni.font.color.rgb = RGBColor(0, 51, 102)
+def render_report_export_buttons(report: IncidentReport, key_prefix: str) -> None:
+    """Hiển thị 3 nút tải báo cáo (Markdown, JSON, Word .docx) trên 3 cột chuẩn."""
+    md_content = generate_markdown_report(report)
+    json_content = generate_json_report(report)
+    docx_bytes = generate_docx_report(report)
 
-    r_dep = p_header.add_run("KHOA CÔNG NGHỆ THÔNG TIN - BỘ MÔN AN TOÀN THÔNG TIN\n")
-    r_dep.bold = True
-    r_dep.font.size = Pt(11)
-
-    r_sub = p_header.add_run("ĐỀ TÀI KHÓA LUẬN TỐT NGHIỆP: HỆ THỐNG SOC MULTI-AGENT PROTOTYPE V1.0\n")
-    r_sub.font.size = Pt(10)
-    r_sub.font.italic = True
-
-    doc.add_paragraph("―" * 45).alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    # 2. Tiêu đề Báo cáo
-    p_title = doc.add_heading(level=0)
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r_title = p_title.add_run(f"🛡️ {report.incident_title}")
-    r_title.font.size = Pt(18)
-    r_title.bold = True
-    r_title.font.color.rgb = RGBColor(180, 0, 0)
-
-    # Metadata
-    p_meta = doc.add_paragraph()
-    p_meta.add_run(f"• Mã Báo cáo: ").bold = True
-    p_meta.add_run(f"{report.report_id}\n")
-    p_meta.add_run(f"• Thời gian xuất bản: ").bold = True
-    p_meta.add_run(f"{format_vn_time(report.created_at, '%Y-%m-%d %H:%M:%S (ICT / Giờ Việt Nam)')}\n")
-    p_meta.add_run(f"• Tiêu chuẩn tham chiếu: ").bold = True
-    p_meta.add_run("NIST SP 800-61 Rev.2 & MITRE ATT&CK Framework\n")
-
-    # 3. Mục 1: Executive Summary
-    h1 = doc.add_heading("1. Tóm lược điều hành (Executive Summary)", level=1)
-    h1.style.font.color.rgb = RGBColor(0, 51, 102)
-    p_exec = doc.add_paragraph()
-    r_exec = p_exec.add_run(report.executive_summary)
-    r_exec.font.size = Pt(11)
-
-    # 4. Mục 2: Detailed Technical Findings
-    h2 = doc.add_heading("2. Chi tiết kỹ thuật & Phân tích nguyên nhân (Technical Findings)", level=1)
-    h2.style.font.color.rgb = RGBColor(0, 51, 102)
-    p_tech = doc.add_paragraph()
-    p_tech.add_run(report.detailed_findings)
-
-    # 5. Mục 3: MITRE ATT&CK Matrix Mapping
-    h3 = doc.add_heading("3. Ma trận Kỹ thuật MITRE ATT&CK", level=1)
-    h3.style.font.color.rgb = RGBColor(0, 51, 102)
-    if report.mitre_attack_matrix_mapping:
-        for idx, tech in enumerate(report.mitre_attack_matrix_mapping, start=1):
-            doc.add_paragraph(f"{idx}. Mã Kỹ thuật: {tech}", style="List Bullet")
-    else:
-        doc.add_paragraph("Chưa ghi nhận mã kỹ thuật cụ thể.")
-
-    # 6. Mục 4: Bảng IoC
-    h4 = doc.add_heading("4. Danh sách Chỉ số Xâm phạm (IoC Table)", level=1)
-    h4.style.font.color.rgb = RGBColor(0, 51, 102)
-
-    if report.ioc_table:
-        table_ioc = doc.add_table(rows=1, cols=5)
-        table_ioc.alignment = WD_TABLE_ALIGNMENT.CENTER
-        hdr_cells = table_ioc.rows[0].cells
-        hdr_titles = ["STT", "Loại IoC", "Giá trị Chỉ số", "Điểm Độc hại", "Đánh giá"]
-        for i, title in enumerate(hdr_titles):
-            hdr_cells[i].text = title
-            hdr_cells[i].paragraphs[0].runs[0].bold = True
-
-        for idx, ioc in enumerate(report.ioc_table, start=1):
-            row_cells = table_ioc.add_row().cells
-            row_cells[0].text = str(idx)
-            row_cells[1].text = ioc.ioc_type
-            row_cells[2].text = ioc.value
-            row_cells[3].text = str(ioc.reputation_score or 0)
-            row_cells[4].text = "Độc hại" if ioc.is_malicious else "Đã kiểm tra"
-    else:
-        doc.add_paragraph("Không phát hiện chỉ số xâm phạm ngoài vùng tin cậy.")
-
-    # 7. Mục 5: Action Plan
-    h5 = doc.add_heading("5. Kế hoạch Phản ứng & Hành động Khắc phục (Action Plan)", level=1)
-    h5.style.font.color.rgb = RGBColor(0, 51, 102)
-
-    if report.action_plan:
-        table_act = doc.add_table(rows=1, cols=5)
-        table_act.alignment = WD_TABLE_ALIGNMENT.CENTER
-        hdr_cells_act = table_act.rows[0].cells
-        hdr_titles_act = ["Loại hành động", "Mục tiêu (Target)", "Ưu tiên", "Cần duyệt", "Trạng thái"]
-        for i, title in enumerate(hdr_titles_act):
-            hdr_cells_act[i].text = title
-            hdr_cells_act[i].paragraphs[0].runs[0].bold = True
-
-        for act in report.action_plan:
-            row_cells = table_act.add_row().cells
-            row_cells[0].text = act.action_type.value if hasattr(act.action_type, "value") else str(act.action_type)
-            row_cells[1].text = act.target
-            row_cells[2].text = f"Mức {act.priority}"
-            row_cells[3].text = "Có" if act.require_human_approval else "Không"
-            if act.is_approved is True:
-                st_txt = "Đã duyệt"
-            elif act.is_approved is False:
-                st_txt = "Bị từ chối"
-            else:
-                st_txt = "Chờ duyệt"
-            row_cells[4].text = st_txt
-    else:
-        doc.add_paragraph("Không có hành động nào cần thực thi.")
-
-    # Footer
-    p_footer = doc.add_paragraph()
-    p_footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_footer.add_run(f"\nBáo cáo tạo tự động bởi Hệ thống HCMUTE Multi-Agent SOC - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}").italic = True
-
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    return buf.getvalue()
+    dl_col1, dl_col2, dl_col3 = st.columns(3)
+    with dl_col1:
+        st.download_button(
+            label="📥 Tải Markdown (.md)",
+            data=md_content,
+            file_name=f"{report.report_id}.md",
+            mime="text/markdown",
+            key=f"{key_prefix}_dl_md",
+            use_container_width=True,
+        )
+    with dl_col2:
+        st.download_button(
+            label="📥 Tải Dữ liệu JSON (.json)",
+            data=json_content,
+            file_name=f"{report.report_id}.json",
+            mime="application/json",
+            key=f"{key_prefix}_dl_json",
+            use_container_width=True,
+        )
+    with dl_col3:
+        st.download_button(
+            label="📥 Tải Báo cáo Word (.docx)",
+            data=docx_bytes,
+            file_name=f"{report.report_id}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key=f"{key_prefix}_dl_docx",
+            use_container_width=True,
+        )
 
 
 # =====================================================================
@@ -476,8 +392,8 @@ def run_dashboard_headless_check() -> bool:
     # 6. Kiểm tra IoC Table & MITRE Matrix
     ioc_rows = format_ioc_table_data(final_state.threat_intel)
     mitre_data = extract_mitre_data(final_state.threat_intel, final_state.rca_result)
-    proc_rows = format_process_tree_data(final_state.rca_result)
-    timeline_rows = format_timeline_data(final_state.rca_result)
+    format_process_tree_data(final_state.rca_result)
+    format_timeline_data(final_state.rca_result)
 
     if not isinstance(ioc_rows, list) or not isinstance(mitre_data, dict):
         raise TypeError("Định dạng dữ liệu IoC/MITRE không hợp lệ")
@@ -502,6 +418,17 @@ def run_dashboard_headless_check() -> bool:
         )
         assert final_state.recommended_actions[0].is_approved is False
 
+        # 7b. Kiểm tra Phân quyền Simple RBAC và Process Whitelist Guard
+        assert can_user_approve_action(ROLE_SOC_MANAGER, final_state.recommended_actions[0]) is True
+        assert can_user_approve_action(ROLE_SOC_ANALYST, "ISOLATE_HOST") is False
+        assert can_user_approve_action(ROLE_SOC_ANALYST, "BLOCK_IP") is True
+        assert is_critical_system_process("svchost.exe") is True
+        assert is_critical_system_process("lsass.exe") is True
+        assert is_critical_system_process("explorer.exe") is True
+        assert is_critical_system_process("powershell.exe") is False
+        assert get_action_rbac_warning(ROLE_SOC_ANALYST, "ISOLATE_HOST") is not None
+        assert get_whitelist_guard_warning("lsass.exe") is not None
+
     # 8. Kiểm tra Xuất Báo cáo (Markdown, JSON, DOCX)
     if final_state.final_report:
         md_text = generate_markdown_report(final_state.final_report)
@@ -518,7 +445,6 @@ def run_dashboard_headless_check() -> bool:
             raise ValueError("DOCX report export trả về dữ liệu rỗng hoặc quá nhỏ")
 
     # 9. Kiểm tra Trợ lý SOC Engine & Provider
-    from src.copilot.engine import SOCCopilotEngine
     copilot_engine = SOCCopilotEngine()
     if not hasattr(copilot_engine, "provider") or not copilot_engine.provider:
         raise ValueError("SOCCopilotEngine thiếu thuộc tính provider tương thích ngược")
@@ -548,7 +474,6 @@ def init_session_state():
         )
 
     if "copilot_engine" not in st.session_state:
-        from src.copilot.engine import SOCCopilotEngine
         st.session_state.copilot_engine = SOCCopilotEngine()
 
     if "copilot_messages" not in st.session_state:
@@ -579,6 +504,9 @@ def init_session_state():
     if "current_node" not in st.session_state:
         st.session_state.current_node = "ingestion"
 
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = ROLE_SOC_ANALYST
+
 
 def reset_pipeline(scenario_key: str, custom_content: Optional[str] = None):
     """Đặt lại pipeline điều phối về trạng thái ban đầu với kịch bản được chọn."""
@@ -586,7 +514,6 @@ def reset_pipeline(scenario_key: str, custom_content: Optional[str] = None):
         st.session_state.selected_scenario_key = "live_wazuh"
         st.session_state.evidence_source_mode = "live_wazuh"
         try:
-            from src.core.incident_store import IncidentStore
             store = IncidentStore()
             # CHỈ lấy các sự cố thực tế nhận từ Webhook Wazuh Live (bắt đầu bằng INC-WAZUH-)
             # Không lấy nhầm các sự cố từ kịch bản mẫu offline (INC-MALW-, INC-PHIS-,...)
@@ -597,9 +524,7 @@ def reset_pipeline(scenario_key: str, custom_content: Optional[str] = None):
             if live_incidents:
                 latest_inc = live_incidents[0]
                 st.session_state.incident_state = latest_inc
-                st.session_state.raw_alerts = [
-                    json.loads(r.raw_payload) for r in latest_inc.raw_logs if r.raw_payload.startswith("{")
-                ]
+                st.session_state.raw_alerts = _extract_raw_alert_dicts(latest_inc)
                 st.session_state.current_node = None if latest_inc.final_report else "triage"
                 try:
                     st.toast(f"📡 Đã nạp sự cố Live Wazuh mới nhất: {latest_inc.incident_id}", icon="🔴")
@@ -727,6 +652,44 @@ def main():
             """,
             unsafe_allow_html=True,
         )
+
+        # PHÂN QUYỀN VAI TRÒ NGƯỜI DÙNG (SIMPLE RBAC)
+        st.markdown("##### 👤 Vai trò Vận hành (Simple RBAC):")
+        current_role = st.session_state.get("user_role", ROLE_SOC_ANALYST)
+        if current_role not in USER_ROLES:
+            current_role = ROLE_SOC_ANALYST
+        selected_role = st.selectbox(
+            "Chọn vai trò vận hành:",
+            options=USER_ROLES,
+            index=USER_ROLES.index(current_role),
+            key="user_role_select",
+            label_visibility="collapsed",
+            help="SOC Analyst (Tier 1/2): Xem xét và đề xuất xử lý. SOC Manager (Incident Commander): Toàn quyền duyệt hành động nguy hiểm (ISOLATE_HOST, KILL_PROCESS)."
+        )
+        st.session_state["user_role"] = selected_role
+
+        if selected_role == ROLE_SOC_MANAGER:
+            st.markdown(
+                """
+                <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px;">
+                    <div style="color: #38bdf8; font-weight: 700; font-size: 0.78rem;">👑 Incident Commander (SOC Manager)</div>
+                    <div style="color: #cbd5e1; font-size: 0.72rem; margin-top: 2px;">Toàn quyền phê duyệt các biện pháp ngăn chặn khẩn cấp.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                """
+                <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px;">
+                    <div style="color: #fbbf24; font-weight: 700; font-size: 0.78rem;">🔍 Phân tích viên Tier 1/2 (SOC Analyst)</div>
+                    <div style="color: #cbd5e1; font-size: 0.72rem; margin-top: 2px;">Khóa quyền duyệt hành động rủi ro cao (Cô lập/Diệt tiến trình).</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.divider()
 
         nav_options = [
             "🏠 Trang chủ",
@@ -923,7 +886,6 @@ def main():
                     st.rerun()
             with col_a3:
                 if st.button("📊 Xem đánh giá sự cố", use_container_width=True):
-                    st.session_state.active_tab_hint = "Đánh giá sự cố"
                     st.info("Chuyển sang mục '📈 Đánh giá sự cố' trên menu bên trái để xem chi tiết.")
 
         with col_hero_right:
@@ -1345,7 +1307,8 @@ def main():
                 st.json(state.checkpoints)
 
         with tab_ir2:
-            render_hitl_action_cards(state)
+            current_user_role = st.session_state.get("user_role", ROLE_SOC_ANALYST)
+            render_hitl_action_cards(state, user_role=current_user_role)
             st.divider()
             col_act1, col_act2 = st.columns([1, 2])
             with col_act1:
@@ -1358,7 +1321,7 @@ def main():
                     with st.spinner("Đang thực thi các hành động đã phê duyệt và sinh báo cáo sự cố..."):
                         orch = st.session_state.orchestrator
                         state.analyst_approved = any(a.is_approved is True for a in state.recommended_actions)
-                        state.analyst_feedback = "Chuyên viên SOC đã xác nhận kế hoạch can thiệp trên giao diện Web HITL"
+                        state.analyst_feedback = f"Kế hoạch can thiệp được xác nhận trên giao diện Web HITL bởi {current_user_role}"
                         final_state = orch.resume_after_hitl(
                             state=state,
                             analyst_approved=state.analyst_approved,
@@ -1560,7 +1523,6 @@ def main():
     elif selected_nav == "💬 Trợ lý SOC":
         st.subheader("💬 Trợ lý SOC (Tương tác Điều tra & Điều khiển HITL)")
 
-        from src.copilot.engine import SOCCopilotEngine
         copilot_engine: SOCCopilotEngine = st.session_state.copilot_engine
         provider_obj = getattr(copilot_engine, "provider", getattr(copilot_engine, "llm_provider", None))
         provider_name = getattr(provider_obj, "provider_type", "Hybrid") if provider_obj else "Unknown"
@@ -1587,10 +1549,10 @@ def main():
                         <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;">🟢 Online</span>
                     </div>
                     <div style="margin-top: 8px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
-                        • <strong>Gateway:</strong> <code style="color: #38bdf8;">{provider_name.upper()}</code><br/>
-                        • <strong>Model:</strong> <code style="color: #38bdf8;">{active_model}</code><br/>
-                        • <strong>Sự cố:</strong> <code style="color: #cbd5e1;">{state.incident_id}</code><br/>
-                        • <strong>Mức độ:</strong> <code style="color: #fbbf24;">{sev_label}</code>
+                        • <strong>Gateway:</strong> <code style="color: #38bdf8;">{html.escape(str(provider_name.upper()))}</code><br/>
+                        • <strong>Model:</strong> <code style="color: #38bdf8;">{html.escape(str(active_model))}</code><br/>
+                        • <strong>Sự cố:</strong> <code style="color: #cbd5e1;">{html.escape(str(state.incident_id))}</code><br/>
+                        • <strong>Mức độ:</strong> <code style="color: #fbbf24;">{html.escape(str(sev_label))}</code>
                     </div>
                 </div>
                 """,
@@ -1753,44 +1715,13 @@ def main():
                             st.rerun()
             else:
                 rep = state.final_report
-
-                md_content = generate_markdown_report(rep)
-                json_content = generate_json_report(rep)
-                docx_bytes = generate_docx_report(rep)
-
-                # Thanh công cụ tải xuống và đồng bộ kho lưu trữ
-                col_d1, col_d2, col_d3, col_save = st.columns([1, 1, 1, 1])
-                with col_d1:
-                    st.download_button(
-                        label="📥 Tải Markdown (.md)",
-                        data=md_content,
-                        file_name=f"Incident_Report_{state.incident_id}.md",
-                        mime="text/markdown",
-                        use_container_width=True,
-                    )
-                with col_d2:
-                    st.download_button(
-                        label="📥 Tải Dữ liệu JSON (.json)",
-                        data=json_content,
-                        file_name=f"Incident_Report_{state.incident_id}.json",
-                        mime="application/json",
-                        use_container_width=True,
-                    )
-                with col_d3:
-                    st.download_button(
-                        label="📥 Tải Báo cáo Word (.docx)",
-                        data=docx_bytes,
-                        file_name=f"Incident_Report_{state.incident_id}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True,
-                    )
-                with col_save:
-                    if st.button("💾 Lưu vào Kho Lưu trữ", use_container_width=True, help="Lưu đè trạng thái hiện tại vào kho lưu trữ disk"):
-                        saved_path = persist_incident_state(state)
-                        st.success(f"Đã lưu: `{state.incident_id}`")
+                render_report_export_buttons(rep, key_prefix=f"active_{state.incident_id}")
+                if st.button("💾 Lưu vào Kho Lưu trữ", use_container_width=True, help="Lưu đè trạng thái hiện tại vào kho lưu trữ disk"):
+                    persist_incident_state(state)
+                    st.success(f"Đã lưu: `{state.incident_id}`")
 
                 st.divider()
-                st.markdown(md_content)
+                st.markdown(generate_markdown_report(rep))
 
         # ---------------------------------------------------------
         # SUB-TAB 2: KHO LƯU TRỮ & XEM LẠI BÁO CÁO SỰ CỐ LỊCH SỬ
@@ -1816,7 +1747,7 @@ def main():
                 col_empty1, col_empty2 = st.columns([1, 1])
                 with col_empty1:
                     if st.button("🚀 Lưu Sự cố Đang Phân tích Hiện tại vào Kho", type="primary", use_container_width=True):
-                        saved_path = persist_incident_state(state)
+                        persist_incident_state(state)
                         st.success(f"Đã lưu thành công sự cố `{state.incident_id}` vào kho!")
                         st.rerun()
                 with col_empty2:
@@ -1907,13 +1838,7 @@ def main():
                         help="Nạp toàn bộ bối cảnh sự cố này vào Dashboard để xem phả hệ Sysmon, MITRE ATT&CK và trao đổi với Trợ lý SOC",
                     ):
                         st.session_state.incident_state = selected_inc
-                        restored_alerts = []
-                        for r in selected_inc.raw_logs:
-                            try:
-                                restored_alerts.append(json.loads(r.raw_payload))
-                            except Exception:
-                                pass
-                        st.session_state.raw_alerts = restored_alerts
+                        st.session_state.raw_alerts = _extract_raw_alert_dicts(selected_inc)
                         st.session_state.current_node = None
                         st.success(f"✅ Đã nạp thành công sự cố `{selected_inc.incident_id}` vào phiên làm việc! Hãy chuyển sang các Tab khác để xem chi tiết.")
                         st.rerun()
@@ -1957,41 +1882,10 @@ def main():
                             st.rerun()
                 else:
                     rep_hist = selected_inc.final_report
-                    md_h = generate_markdown_report(rep_hist)
-                    json_h = generate_json_report(rep_hist)
-                    docx_h = generate_docx_report(rep_hist)
-
-                    dl_col1, dl_col2, dl_col3 = st.columns(3)
-                    with dl_col1:
-                        st.download_button(
-                            label=f"📥 Tải Markdown ({selected_inc.incident_id})",
-                            data=md_h,
-                            file_name=f"Incident_Report_{selected_inc.incident_id}.md",
-                            mime="text/markdown",
-                            key=f"dl_md_{selected_inc.incident_id}",
-                            use_container_width=True,
-                        )
-                    with dl_col2:
-                        st.download_button(
-                            label=f"📥 Tải JSON ({selected_inc.incident_id})",
-                            data=json_h,
-                            file_name=f"Incident_Report_{selected_inc.incident_id}.json",
-                            mime="application/json",
-                            key=f"dl_json_{selected_inc.incident_id}",
-                            use_container_width=True,
-                        )
-                    with dl_col3:
-                        st.download_button(
-                            label=f"📥 Tải Word .docx ({selected_inc.incident_id})",
-                            data=docx_h,
-                            file_name=f"Incident_Report_{selected_inc.incident_id}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"dl_docx_{selected_inc.incident_id}",
-                            use_container_width=True,
-                        )
+                    render_report_export_buttons(rep_hist, key_prefix=f"hist_{selected_inc.incident_id}")
 
                     with st.expander("📄 Đọc Toàn văn Báo cáo Sự cố Lịch sử (Markdown Preview)", expanded=True):
-                        st.markdown(md_h)
+                        st.markdown(generate_markdown_report(rep_hist))
 
 
 if __name__ == "__main__":

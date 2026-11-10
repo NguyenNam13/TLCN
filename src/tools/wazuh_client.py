@@ -107,9 +107,9 @@ class WazuhClientTool:
         Chuyển đổi một cảnh báo WazuhAlert sang đối tượng chuẩn ParsedEvent
         để truyền vào StateGraph của hệ thống Multi-Agent.
         """
-        win_data = alert.data.get("win", {})
-        eventdata = win_data.get("eventdata", {})
-        system_data = win_data.get("system", {})
+        win_data = alert.data.get("win", {}) if isinstance(alert.data, dict) else {}
+        eventdata = win_data.get("eventdata", {}) if isinstance(win_data, dict) else {}
+        system_data = win_data.get("system", {}) if isinstance(win_data, dict) else {}
 
         # Trích xuất thông tin tiến trình & lệnh
         process_path = eventdata.get("image") or eventdata.get("ImagePath")
@@ -123,14 +123,19 @@ class WazuhClientTool:
             or eventdata.get("SourceIp")
             or eventdata.get("IpAddress")
             or eventdata.get("ipAddress")
-            or alert.agent.ip
         )
         dest_ip = (
             eventdata.get("destinationIp")
             or eventdata.get("DestinationIp")
             or eventdata.get("destinationIP")
         )
-        dest_port = int(eventdata.get("destinationPort")) if eventdata.get("destinationPort") else None
+        raw_dest_port = eventdata.get("destinationPort")
+        dest_port = None
+        if raw_dest_port:
+            try:
+                dest_port = int(str(raw_dest_port).strip())
+            except (ValueError, TypeError):
+                dest_port = None
         file_hash = eventdata.get("hashes") or eventdata.get("Hashes")
         user_name = (
             eventdata.get("user")
@@ -138,6 +143,100 @@ class WazuhClientTool:
             or eventdata.get("targetUserName")
             or eventdata.get("AccountName")
         )
+
+        # UPGRADE: Multi-format support - Linux/Generic Wazuh fields
+        generic_data = alert.data if isinstance(alert.data, dict) else {}
+        if not process_path:
+            process_path = generic_data.get("program_name") or generic_data.get("command")
+        if not process_name and process_path:
+            process_name = process_path.replace("\\", "/").split("/")[-1]
+        if not cmd_line:
+            cmd_line = (
+                generic_data.get("command")
+                or generic_data.get("url")
+                or generic_data.get("request")
+                or alert.full_log
+            )
+        if not source_ip:
+            source_ip = (
+                generic_data.get("srcip")
+                or generic_data.get("src_ip")
+                or generic_data.get("remote_ip")
+                or generic_data.get("clientip")
+                or generic_data.get("hostname")
+            )
+        if not dest_ip:
+            dest_ip = (
+                generic_data.get("dstip")
+                or generic_data.get("dest_ip")
+                or generic_data.get("dst_ip")
+            )
+        if not user_name:
+            user_name = (
+                generic_data.get("srcuser")
+                or generic_data.get("dstuser")
+                or generic_data.get("user")
+                or generic_data.get("username")
+            )
+
+        # UPGRADE: Suricata IDS alert format
+        suricata = generic_data.get("alert", {}) if isinstance(generic_data, dict) else {}
+        if suricata and isinstance(suricata, dict):
+            if not source_ip:
+                source_ip = generic_data.get("src_ip")
+            if not dest_ip:
+                dest_ip = generic_data.get("dest_ip")
+            if not cmd_line and suricata.get("signature"):
+                cmd_line = suricata.get("signature")
+
+        # UPGRADE: Regex fallback from full_log if still missing
+        if alert.full_log and not source_ip:
+            ip_match = re.search(r"\b((?:\d{1,3}\.){3}\d{1,3})\b", alert.full_log)
+            if ip_match:
+                source_ip = ip_match.group(1)
+
+        # Fallback cuối cùng sang agent IP nếu không tìm thấy IP nguồn tấn công nào
+        if not source_ip and alert.agent and alert.agent.ip:
+            source_ip = alert.agent.ip
+
+        if alert.full_log and not user_name:
+            m = re.search(r'(?:invalid\s+user|user\s+name|user|account)[\s=:]+([a-zA-Z0-9_\.\-]+)', alert.full_log, re.IGNORECASE)
+            if m and m.group(1).lower() not in ("invalid", "unknown", "none", "a", "an", "the"):
+                user_name = m.group(1).strip()
+            else:
+                m2 = re.search(r'(?:for|by|as)\s+(?:user\s+|account\s+|invalid\s+)?([a-zA-Z0-9_\.\-]+)(?:\s+from|\s+at|\s+on|\s*[,;:]|\s*$)', alert.full_log, re.IGNORECASE)
+                if m2 and m2.group(1).lower() not in ("invalid", "user", "unknown", "none", "a", "an", "the", "authentication", "failed", "password"):
+                    user_name = m2.group(1).strip()
+
+        if alert.full_log and not cmd_line:
+            cmd_line = alert.full_log[:500]  # Giới hạn 500 ký tự
+
+        if not dest_port:
+            raw_dport = (
+                generic_data.get("dstport")
+                or generic_data.get("dest_port")
+                or generic_data.get("dst_port")
+                or (alert.data.get("dest_port") if isinstance(alert.data, dict) else None)
+            )
+            if raw_dport:
+                try:
+                    dest_port = int(str(raw_dport).strip())
+                except (ValueError, TypeError):
+                    pass
+
+        raw_sport = (
+            eventdata.get("sourcePort")
+            or eventdata.get("SourcePort")
+            or generic_data.get("srcport")
+            or generic_data.get("src_port")
+            or (alert.data.get("src_port") if isinstance(alert.data, dict) else None)
+        )
+        source_port = None
+        if raw_sport:
+            try:
+                source_port = int(str(raw_sport).strip())
+            except (ValueError, TypeError):
+                source_port = None
 
         raw_attrs = {
             "wazuh_alert_id": alert.id,
@@ -151,6 +250,12 @@ class WazuhClientTool:
 
         if alert.rule.mitre and alert.rule.mitre.id:
             raw_attrs["wazuh_mitre_ids"] = alert.rule.mitre.id
+
+        # UPGRADE: Preserve Suricata / Web / Linux metadata if present
+        if isinstance(suricata, dict) and suricata.get("signature"):
+            raw_attrs["suricata_signature"] = suricata.get("signature")
+        if generic_data.get("proto"):
+            raw_attrs["proto"] = generic_data.get("proto")
 
         # Giải mã chuỗi PowerShell Base64 nếu có trong command line
         if cmd_line and "-enc" in cmd_line.lower():
@@ -171,6 +276,7 @@ class WazuhClientTool:
             command_line=cmd_line,
             parent_process=parent_process,
             source_ip=source_ip,
+            source_port=source_port,
             dest_ip=dest_ip,
             dest_port=dest_port,
             file_hash=file_hash,

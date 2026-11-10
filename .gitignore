@@ -23,6 +23,20 @@ env/
 # Datasets & large dumps (optional local caches)
 data/cache/
 *.log
+!data/raw/loghub/*.log
+data/raw/**/*.zip
+data/incidents/*.json
+
+# Coverage & Static Analysis caches
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
 
 # ChromaDB local state
 chroma_db/

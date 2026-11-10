@@ -167,6 +167,318 @@
         "mitigations": "Implement Least Privilege Access. Restrict RPC and LDAP queries from non-administrative endpoints. Monitor Active Directory replication traffic.",
         "detection": "Audit Windows Security Event ID 4672 (Special privileges assigned) and Event ID 4624 for unusual administrative logon sessions. Monitor network traffic to Domain Controllers on LDAP/LDAPS (ports 389/636) and RPC (port 135/445)."
       }
+    },
+    "T1190": {
+      "id": "T1190",
+      "document": "Technique ID: T1190\nName: Exploit Public-Facing Application\nTactic: Initial Access\nDescription: Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network. Weakness in the system can be a software bug, a temporary glitch, or a misconfiguration in web applications, databases, or APIs. (Tấn công khai thác lỗ hổng ứng dụng web công khai như SQL Injection, RCE, Command Injection, Path Traversal).\nDetection: Monitor web server access and error logs (Apache, Nginx, IIS) and WAF/Suricata alerts for SQL injection payloads (UNION SELECT, OR 1=1), directory traversal sequences (../), and anomalous child processes spawned by web server daemons (w3wp.exe, www-data, httpd).\nMitigations: Deploy a Web Application Firewall (WAF) in front of public-facing services. Apply regular security patches, enforce input validation and parameterized queries, and isolate web tier hosts in a strictly segmented DMZ.",
+      "metadata": {
+        "technique_id": "T1190",
+        "name": "Exploit Public-Facing Application",
+        "tactic": "Initial Access",
+        "description": "Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network. Weakness in the system can be a software bug, a temporary glitch, or a misconfiguration in web applications, databases, or APIs. (Tấn công khai thác lỗ hổng ứng dụng web công khai như SQL Injection, RCE, Command Injection, Path Traversal).",
+        "mitigations": "Deploy a Web Application Firewall (WAF) in front of public-facing services. Apply regular security patches, enforce input validation and parameterized queries, and isolate web tier hosts in a strictly segmented DMZ.",
+        "detection": "Monitor web server access and error logs (Apache, Nginx, IIS) and WAF/Suricata alerts for SQL injection payloads (UNION SELECT, OR 1=1), directory traversal sequences (../), and anomalous child processes spawned by web server daemons (w3wp.exe, www-data, httpd)."
+      }
+    },
+    "T1505.003": {
+      "id": "T1505.003",
+      "document": "Technique ID: T1505.003\nName: Server Software Component: Web Shell\nTactic: Persistence\nDescription: Adversaries may backdoor web servers with web shells to establish persistent access to systems. A web shell is a malicious file uploaded to a web server directory that enables remote command execution over HTTP/HTTPS requests. (Cài cắm mã độc Web Shell PHP, ASPX, JSP lên máy chủ web để duy trì quyền điều khiển từ xa).\nDetection: Monitor File Integrity Monitoring (FIM / Wazuh syscheck) for new or modified files in web root directories (/var/www/html, inetpub/wwwroot). Detect web server processes (www-data, nginx, apache2, w3wp.exe) spawning OS shells or system utilities (whoami, id, uname, cat).\nMitigations: Disable execution permissions on file upload directories. Enforce strict File Integrity Monitoring (FIM) and run web server services under minimal non-privileged service accounts.",
+      "metadata": {
+        "technique_id": "T1505.003",
+        "name": "Server Software Component: Web Shell",
+        "tactic": "Persistence",
+        "description": "Adversaries may backdoor web servers with web shells to establish persistent access to systems. A web shell is a malicious file uploaded to a web server directory that enables remote command execution over HTTP/HTTPS requests. (Cài cắm mã độc Web Shell PHP, ASPX, JSP lên máy chủ web để duy trì quyền điều khiển từ xa).",
+        "mitigations": "Disable execution permissions on file upload directories. Enforce strict File Integrity Monitoring (FIM) and run web server services under minimal non-privileged service accounts.",
+        "detection": "Monitor File Integrity Monitoring (FIM / Wazuh syscheck) for new or modified files in web root directories (/var/www/html, inetpub/wwwroot). Detect web server processes (www-data, nginx, apache2, w3wp.exe) spawning OS shells or system utilities (whoami, id, uname, cat)."
+      }
+    },
+    "T1059.004": {
+      "id": "T1059.004",
+      "document": "Technique ID: T1059.004\nName: Command and Scripting Interpreter: Unix Shell\nTactic: Execution\nDescription: Adversaries may abuse Unix shell commands and bash/sh interpreters to execute arbitrary commands, launch reverse shells, or automate post-exploitation tasks on Linux and macOS hosts. (Thực thi tập lệnh bash/sh độc hại trên máy chủ Linux).\nDetection: Monitor auditd (EXECVE, SYSCALL), syslog, and Wazuh agent logs for suspicious /bin/bash or /bin/sh invocations, reverse shell one-liners (/dev/tcp, nc -e, bash -i), and cron/daemon child processes.\nMitigations: Restrict shell access for service accounts (/usr/sbin/nologin). Implement SELinux or AppArmor mandatory access controls and audit command executions with Linux auditd.",
+      "metadata": {
+        "technique_id": "T1059.004",
+        "name": "Command and Scripting Interpreter: Unix Shell",
+        "tactic": "Execution",
+        "description": "Adversaries may abuse Unix shell commands and bash/sh interpreters to execute arbitrary commands, launch reverse shells, or automate post-exploitation tasks on Linux and macOS hosts. (Thực thi tập lệnh bash/sh độc hại trên máy chủ Linux).",
+        "mitigations": "Restrict shell access for service accounts (/usr/sbin/nologin). Implement SELinux or AppArmor mandatory access controls and audit command executions with Linux auditd.",
+        "detection": "Monitor auditd (EXECVE, SYSCALL), syslog, and Wazuh agent logs for suspicious /bin/bash or /bin/sh invocations, reverse shell one-liners (/dev/tcp, nc -e, bash -i), and cron/daemon child processes."
+      }
+    },
+    "T1548.003": {
+      "id": "T1548.003",
+      "document": "Technique ID: T1548.003\nName: Abuse Elevation Control Mechanism: Sudo and Sudo Caching\nTactic: Privilege Escalation\nDescription: Adversaries may perform sudo caching and/or misconfigured sudoers policies to elevate privileges to root on Linux systems without re-authenticating or by exploiting GTFOBins binaries allowed via NOPASSWD. (Leo thang đặc quyền trái phép qua lỗ hổng cấu hình sudo trên Linux).\nDetection: Monitor /var/log/auth.log and /var/log/secure (Wazuh rule 5402) for sudo invocations, unexpected user-to-root transitions, sudoers file modifications, and failed sudo attempts.\nMitigations: Audit /etc/sudoers regularly to remove NOPASSWD entries and wildcard command allowances. Set timestamp_timeout=0 in sudo configuration and restrict sudo access to authorized admins.",
+      "metadata": {
+        "technique_id": "T1548.003",
+        "name": "Abuse Elevation Control Mechanism: Sudo and Sudo Caching",
+        "tactic": "Privilege Escalation",
+        "description": "Adversaries may perform sudo caching and/or misconfigured sudoers policies to elevate privileges to root on Linux systems without re-authenticating or by exploiting GTFOBins binaries allowed via NOPASSWD. (Leo thang đặc quyền trái phép qua lỗ hổng cấu hình sudo trên Linux).",
+        "mitigations": "Audit /etc/sudoers regularly to remove NOPASSWD entries and wildcard command allowances. Set timestamp_timeout=0 in sudo configuration and restrict sudo access to authorized admins.",
+        "detection": "Monitor /var/log/auth.log and /var/log/secure (Wazuh rule 5402) for sudo invocations, unexpected user-to-root transitions, sudoers file modifications, and failed sudo attempts."
+      }
+    },
+    "T1003.001": {
+      "id": "T1003.001",
+      "document": "Technique ID: T1003.001\nName: OS Credential Dumping: LSASS Memory\nTactic: Credential Access\nDescription: Adversaries may attempt to access credential material stored in the process memory of the Local Security Authority Subsystem Service (LSASS) to harvest NTLM hashes and Kerberos tickets. (Trích xuất bộ nhớ tiến trình LSASS qua Sysmon Event 10, Mimikatz, ProcDump, comsvcs.dll để thu thập thông tin xác thực NTLM/Kerberos).\nDetection: Monitor Sysmon Event ID 10 (ProcessAccess) targeting lsass.exe with suspicious GrantedAccess masks (0x1010, 0x1410, 0x1438, 0x1fffff). Detect executions of procdump.exe, rundll32.exe comsvcs.dll MiniDump, and sekurlsa::logonpasswords.\nMitigations: Enable Windows Defender Credential Guard and LSA Protection (RunAsPPL). Restrict SeDebugPrivilege via Group Policy and block untrusted processes from opening handles to lsass.exe.",
+      "metadata": {
+        "technique_id": "T1003.001",
+        "name": "OS Credential Dumping: LSASS Memory",
+        "tactic": "Credential Access",
+        "description": "Adversaries may attempt to access credential material stored in the process memory of the Local Security Authority Subsystem Service (LSASS) to harvest NTLM hashes and Kerberos tickets. (Trích xuất bộ nhớ tiến trình LSASS qua Sysmon Event 10, Mimikatz, ProcDump, comsvcs.dll để thu thập thông tin xác thực NTLM/Kerberos).",
+        "mitigations": "Enable Windows Defender Credential Guard and LSA Protection (RunAsPPL). Restrict SeDebugPrivilege via Group Policy and block untrusted processes from opening handles to lsass.exe.",
+        "detection": "Monitor Sysmon Event ID 10 (ProcessAccess) targeting lsass.exe with suspicious GrantedAccess masks (0x1010, 0x1410, 0x1438, 0x1fffff). Detect executions of procdump.exe, rundll32.exe comsvcs.dll MiniDump, and sekurlsa::logonpasswords."
+      }
+    },
+    "T1105": {
+      "id": "T1105",
+      "document": "Technique ID: T1105\nName: Ingress Tool Transfer\nTactic: Command and Control\nDescription: Adversaries may transfer tools or binary files from an external command and control system into a compromised environment to stage secondary utilities and malware binaries. (Tải công cụ tấn công, mã độc từ máy chủ C2 bên ngoài vào hệ thống nội bộ bằng certutil, curl, wget, bitsadmin).\nDetection: Monitor process creation and network connection logs for living-off-the-land binaries (certutil.exe -urlcache -split -f, bitsadmin /transfer, curl, wget) making outbound HTTP/HTTPS requests and writing executable files to temp or public directories.\nMitigations: Enforce application allowlisting (WDAC/AppLocker) to block unauthorized binaries downloaded to user-writable folders. Filter outbound connections at the proxy and firewall layers.",
+      "metadata": {
+        "technique_id": "T1105",
+        "name": "Ingress Tool Transfer",
+        "tactic": "Command and Control",
+        "description": "Adversaries may transfer tools or binary files from an external command and control system into a compromised environment to stage secondary utilities and malware binaries. (Tải công cụ tấn công, mã độc từ máy chủ C2 bên ngoài vào hệ thống nội bộ bằng certutil, curl, wget, bitsadmin).",
+        "mitigations": "Enforce application allowlisting (WDAC/AppLocker) to block unauthorized binaries downloaded to user-writable folders. Filter outbound connections at the proxy and firewall layers.",
+        "detection": "Monitor process creation and network connection logs for living-off-the-land binaries (certutil.exe -urlcache -split -f, bitsadmin /transfer, curl, wget) making outbound HTTP/HTTPS requests and writing executable files to temp or public directories."
+      }
+    },
+    "T1490": {
+      "id": "T1490",
+      "document": "Technique ID: T1490\nName: Inhibit System Recovery\nTactic: Impact\nDescription: Adversaries may delete or remove built-in operating system data and turn off recovery features to prevent system restoration after a ransomware or destructive attack. (Xóa bản sao lưu hệ thống Volume Shadow Copies bằng vssadmin delete shadows, wbadmin, bcdedit để ngăn chặn khôi phục dữ liệu sau khi mã hóa Ransomware).\nDetection: Monitor Sysmon Event ID 1 and Windows Security Event ID 4688 for command lines containing vssadmin.exe delete shadows /all /quiet, wmic shadowcopy delete, wbadmin delete catalog, or bcdedit /set recoveryenabled no.\nMitigations: Maintain immutable offline backups isolated from domain credentials. Use EDR behavioral prevention rules to block unauthorized invocations of vssadmin.exe, wbadmin.exe, and bcdedit.exe.",
+      "metadata": {
+        "technique_id": "T1490",
+        "name": "Inhibit System Recovery",
+        "tactic": "Impact",
+        "description": "Adversaries may delete or remove built-in operating system data and turn off recovery features to prevent system restoration after a ransomware or destructive attack. (Xóa bản sao lưu hệ thống Volume Shadow Copies bằng vssadmin delete shadows, wbadmin, bcdedit để ngăn chặn khôi phục dữ liệu sau khi mã hóa Ransomware).",
+        "mitigations": "Maintain immutable offline backups isolated from domain credentials. Use EDR behavioral prevention rules to block unauthorized invocations of vssadmin.exe, wbadmin.exe, and bcdedit.exe.",
+        "detection": "Monitor Sysmon Event ID 1 and Windows Security Event ID 4688 for command lines containing vssadmin.exe delete shadows /all /quiet, wmic shadowcopy delete, wbadmin delete catalog, or bcdedit /set recoveryenabled no."
+      }
+    },
+    "T1041": {
+      "id": "T1041",
+      "document": "Technique ID: T1041\nName: Exfiltration Over C2 Channel\nTactic: Exfiltration\nDescription: Adversaries may steal data by exfiltrating it over an existing command and control channel rather than a separate channel. Stolen data is encoded and transmitted within normal C2 communications. (Rò rỉ và đánh cắp dữ liệu nhạy cảm ra ngoài qua kênh truyền điều khiển C2).\nDetection: Analyze network flow telemetry (Zeek conn.log, Suricata eve.json, firewall logs) for large outbound byte transfers, persistent long-lived sessions, and high upload-to-download ratios to external C2 IP addresses.\nMitigations: Deploy Data Loss Prevention (DLP) and egress network traffic inspection. Enforce strict egress firewall rules and terminate unauthorized outbound sessions.",
+      "metadata": {
+        "technique_id": "T1041",
+        "name": "Exfiltration Over C2 Channel",
+        "tactic": "Exfiltration",
+        "description": "Adversaries may steal data by exfiltrating it over an existing command and control channel rather than a separate channel. Stolen data is encoded and transmitted within normal C2 communications. (Rò rỉ và đánh cắp dữ liệu nhạy cảm ra ngoài qua kênh truyền điều khiển C2).",
+        "mitigations": "Deploy Data Loss Prevention (DLP) and egress network traffic inspection. Enforce strict egress firewall rules and terminate unauthorized outbound sessions.",
+        "detection": "Analyze network flow telemetry (Zeek conn.log, Suricata eve.json, firewall logs) for large outbound byte transfers, persistent long-lived sessions, and high upload-to-download ratios to external C2 IP addresses."
+      }
+    },
+    "T1070.001": {
+      "id": "T1070.001",
+      "document": "Technique ID: T1070.001\nName: Indicator Removal: Clear Windows Event Logs\nTactic: Defense Evasion\nDescription: Adversaries may clear Windows Event Logs to hide the activity of an intrusion and impede forensic investigation. (Xóa nhật ký sự kiện Windows Security/System bằng wevtutil cl, Clear-EventLog, phát sinh Event ID 1102 và Event ID 104 nhằm xóa dấu vết điều tra).\nDetection: Monitor Windows Security Event ID 1102 (The audit log was cleared) and System Event ID 104 (The Log file was cleared). Detect command-line executions of wevtutil.exe cl Security, wevtutil cl System, or Clear-EventLog.\nMitigations: Forward all endpoint event logs in real time to a centralized, append-only SIEM (Wazuh/Splunk) so local log deletion cannot erase historical forensic telemetry.",
+      "metadata": {
+        "technique_id": "T1070.001",
+        "name": "Indicator Removal: Clear Windows Event Logs",
+        "tactic": "Defense Evasion",
+        "description": "Adversaries may clear Windows Event Logs to hide the activity of an intrusion and impede forensic investigation. (Xóa nhật ký sự kiện Windows Security/System bằng wevtutil cl, Clear-EventLog, phát sinh Event ID 1102 và Event ID 104 nhằm xóa dấu vết điều tra).",
+        "mitigations": "Forward all endpoint event logs in real time to a centralized, append-only SIEM (Wazuh/Splunk) so local log deletion cannot erase historical forensic telemetry.",
+        "detection": "Monitor Windows Security Event ID 1102 (The audit log was cleared) and System Event ID 104 (The Log file was cleared). Detect command-line executions of wevtutil.exe cl Security, wevtutil cl System, or Clear-EventLog."
+      }
+    },
+    "T1078.004": {
+      "id": "T1078.004",
+      "document": "Technique ID: T1078.004\nName: AWS Cloud Bank Breach S3 (SDAWS-200914011940)\nTactic: Initial Access, Persistence, Privilege Escalation, Defense Evasion, Collection\nDescription: This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket.\nDetection: Monitor OTRF Security Dataset indicators (SDAWS-200914011940) and SIEM telemetry for AWS Cloud Bank Breach S3.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1078.004 (AWS Cloud Bank Breach S3).",
+      "metadata": {
+        "technique_id": "T1078.004",
+        "name": "AWS Cloud Bank Breach S3 (SDAWS-200914011940)",
+        "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion, Collection",
+        "description": "This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1078.004 (AWS Cloud Bank Breach S3).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDAWS-200914011940) and SIEM telemetry for AWS Cloud Bank Breach S3."
+      }
+    },
+    "T1530": {
+      "id": "T1530",
+      "document": "Technique ID: T1530\nName: AWS Cloud Bank Breach S3 (SDAWS-200914011940)\nTactic: Initial Access, Persistence, Privilege Escalation, Defense Evasion, Collection\nDescription: This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket.\nDetection: Monitor OTRF Security Dataset indicators (SDAWS-200914011940) and SIEM telemetry for AWS Cloud Bank Breach S3.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1530 (AWS Cloud Bank Breach S3).",
+      "metadata": {
+        "technique_id": "T1530",
+        "name": "AWS Cloud Bank Breach S3 (SDAWS-200914011940)",
+        "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion, Collection",
+        "description": "This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1530 (AWS Cloud Bank Breach S3).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDAWS-200914011940) and SIEM telemetry for AWS Cloud Bank Breach S3."
+      }
+    },
+    "T1580": {
+      "id": "T1580",
+      "document": "Technique ID: T1580\nName: SDAWS-2202181000 (SDAWS-2202181000)\nTactic: Discovery\nDescription: This dataset represents adversaries trying to scan , discover and access open S3 honeybucket based on known hostname patterns. in this case honeybucket microsoft-devtest.s3.amazonaws.com.\nDetection: Monitor OTRF Security Dataset indicators (SDAWS-2202181000) and SIEM telemetry for SDAWS-2202181000.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1580 (SDAWS-2202181000).",
+      "metadata": {
+        "technique_id": "T1580",
+        "name": "SDAWS-2202181000 (SDAWS-2202181000)",
+        "tactic": "Discovery",
+        "description": "This dataset represents adversaries trying to scan , discover and access open S3 honeybucket based on known hostname patterns. in this case honeybucket microsoft-devtest.s3.amazonaws.com.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1580 (SDAWS-2202181000).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDAWS-2202181000) and SIEM telemetry for SDAWS-2202181000."
+      }
+    },
+    "T1027.001": {
+      "id": "T1027.001",
+      "document": "Technique ID: T1027.001\nName: DD Binary Padding Hash Change (SDLIN-201110081941)\nTactic: Defense Evasion\nDescription: This dataset represents a threat actor using dd to add a zero to the binary to change the hash.\nDetection: Monitor OTRF Security Dataset indicators (SDLIN-201110081941) and SIEM telemetry for DD Binary Padding Hash Change.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1027.001 (DD Binary Padding Hash Change).",
+      "metadata": {
+        "technique_id": "T1027.001",
+        "name": "DD Binary Padding Hash Change (SDLIN-201110081941)",
+        "tactic": "Defense Evasion",
+        "description": "This dataset represents a threat actor using dd to add a zero to the binary to change the hash.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1027.001 (DD Binary Padding Hash Change).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDLIN-201110081941) and SIEM telemetry for DD Binary Padding Hash Change."
+      }
+    },
+    "T1222.001": {
+      "id": "T1222.001",
+      "document": "Technique ID: T1222.001\nName: Empire Powerview Add-DomainObjectAcl (SDWIN-190301125905)\nTactic: Defense Evasion\nDescription: These datasets represent adversaries with enough permissions (i.e. domain admin) adding an access control entry (ACE) to the discretionary access control list (DACL) of an Active Directory object (i.e Root Domain). One example could be adversaries modifying the root domain DACL to allow a specific domain user, despite being in no privileged groups and not having local admin rights on the domain controller itself, to use Active Directory replication services and obtain secret domain data (i.e. Other user NTLM Hashes)\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190301125905) and SIEM telemetry for Empire Powerview Add-DomainObjectAcl.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1222.001 (Empire Powerview Add-DomainObjectAcl).",
+      "metadata": {
+        "technique_id": "T1222.001",
+        "name": "Empire Powerview Add-DomainObjectAcl (SDWIN-190301125905)",
+        "tactic": "Defense Evasion",
+        "description": "These datasets represent adversaries with enough permissions (i.e. domain admin) adding an access control entry (ACE) to the discretionary access control list (DACL) of an Active Directory object (i.e Root Domain). One example could be adversaries modifying the root domain DACL to allow a specific domain user, despite being in no privileged groups and not having local admin rights on the domain controller itself, to use Active Directory replication services and obtain secret domain data (i.e. Other user NTLM Hashes)",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1222.001 (Empire Powerview Add-DomainObjectAcl).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190301125905) and SIEM telemetry for Empire Powerview Add-DomainObjectAcl."
+      }
+    },
+    "T1003.006": {
+      "id": "T1003.006",
+      "document": "Technique ID: T1003.006\nName: Empire DCSync (SDWIN-190301174830)\nTactic: Credential Access\nDescription: This dataset represents adversaries abusing Active Directory Replication services to retrieve secret domain data (i.e. NTLM hashes) from domain accounts.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190301174830) and SIEM telemetry for Empire DCSync.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1003.006 (Empire DCSync).",
+      "metadata": {
+        "technique_id": "T1003.006",
+        "name": "Empire DCSync (SDWIN-190301174830)",
+        "tactic": "Credential Access",
+        "description": "This dataset represents adversaries abusing Active Directory Replication services to retrieve secret domain data (i.e. NTLM hashes) from domain accounts.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1003.006 (Empire DCSync).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190301174830) and SIEM telemetry for Empire DCSync."
+      }
+    },
+    "T1069.001": {
+      "id": "T1069.001",
+      "document": "Technique ID: T1069.001\nName: Empire Net Local Administrators Group (SDWIN-190319020147)\nTactic: Discovery\nDescription: This dataset represents adversaries enumerating members of the local Administratrors group via the net.exe utility\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190319020147) and SIEM telemetry for Empire Net Local Administrators Group.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1069.001 (Empire Net Local Administrators Group).",
+      "metadata": {
+        "technique_id": "T1069.001",
+        "name": "Empire Net Local Administrators Group (SDWIN-190319020147)",
+        "tactic": "Discovery",
+        "description": "This dataset represents adversaries enumerating members of the local Administratrors group via the net.exe utility",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1069.001 (Empire Net Local Administrators Group).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190319020147) and SIEM telemetry for Empire Net Local Administrators Group."
+      }
+    },
+    "T1087.001": {
+      "id": "T1087.001",
+      "document": "Technique ID: T1087.001\nName: Empire Net Local Users (SDWIN-190319020729)\nTactic: Discovery\nDescription: This dataset represents adversaries enumerating all local users on an endpoint\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190319020729) and SIEM telemetry for Empire Net Local Users.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1087.001 (Empire Net Local Users).",
+      "metadata": {
+        "technique_id": "T1087.001",
+        "name": "Empire Net Local Users (SDWIN-190319020729)",
+        "tactic": "Discovery",
+        "description": "This dataset represents adversaries enumerating all local users on an endpoint",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1087.001 (Empire Net Local Users).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190319020729) and SIEM telemetry for Empire Net Local Users."
+      }
+    },
+    "T1547.001": {
+      "id": "T1547.001",
+      "document": "Technique ID: T1547.001\nName: Empire Userland Registry Run Keys (SDWIN-190319023812)\nTactic: Persistence\nDescription: This dataset represents adversaries modifying local Run registry keys (i.e. HKLM:SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run) for persistence. It also captures the execution of the persistence mechanism.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190319023812) and SIEM telemetry for Empire Userland Registry Run Keys.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1547.001 (Empire Userland Registry Run Keys).",
+      "metadata": {
+        "technique_id": "T1547.001",
+        "name": "Empire Userland Registry Run Keys (SDWIN-190319023812)",
+        "tactic": "Persistence",
+        "description": "This dataset represents adversaries modifying local Run registry keys (i.e. HKLM:SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run) for persistence. It also captures the execution of the persistence mechanism.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1547.001 (Empire Userland Registry Run Keys).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190319023812) and SIEM telemetry for Empire Userland Registry Run Keys."
+      }
+    },
+    "T1550.002": {
+      "id": "T1550.002",
+      "document": "Technique ID: T1550.002\nName: Empire Over-Pass-The-Hash (SDWIN-190319131123)\nTactic: Defense Evasion, Lateral Movement\nDescription: This dataset represents adversaries taking a hash/key (rc4_hmac, aes256_cts_hmac_sha1, etc.) for a domain-joined user into a fully-fledged Kerberos TGT. In this case, an adversary can write the hash/key into an existing logon session (i.e. a sacrificial logon session) section in the memory content of LSASS and kick off the regular Kerberos authentication process.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190319131123) and SIEM telemetry for Empire Over-Pass-The-Hash.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1550.002 (Empire Over-Pass-The-Hash).",
+      "metadata": {
+        "technique_id": "T1550.002",
+        "name": "Empire Over-Pass-The-Hash (SDWIN-190319131123)",
+        "tactic": "Defense Evasion, Lateral Movement",
+        "description": "This dataset represents adversaries taking a hash/key (rc4_hmac, aes256_cts_hmac_sha1, etc.) for a domain-joined user into a fully-fledged Kerberos TGT. In this case, an adversary can write the hash/key into an existing logon session (i.e. a sacrificial logon session) section in the memory content of LSASS and kick off the regular Kerberos authentication process.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1550.002 (Empire Over-Pass-The-Hash).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190319131123) and SIEM telemetry for Empire Over-Pass-The-Hash."
+      }
+    },
+    "T1003.003": {
+      "id": "T1003.003",
+      "document": "Technique ID: T1003.003\nName: Rubeus Userland ASKTGT PTT (SDWIN-190319145126)\nTactic: Credential Access\nDescription: This dataset represents adversaries crafting raw AS-REQ (TGT request) traffic for a specific user and encryption key (/rc4, /aes128, /aes256, or /des) to request TGTs without touching lsass.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190319145126) and SIEM telemetry for Rubeus Userland ASKTGT PTT.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1003.003 (Rubeus Userland ASKTGT PTT).",
+      "metadata": {
+        "technique_id": "T1003.003",
+        "name": "Rubeus Userland ASKTGT PTT (SDWIN-190319145126)",
+        "tactic": "Credential Access",
+        "description": "This dataset represents adversaries crafting raw AS-REQ (TGT request) traffic for a specific user and encryption key (/rc4, /aes128, /aes256, or /des) to request TGTs without touching lsass.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1003.003 (Rubeus Userland ASKTGT PTT).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190319145126) and SIEM telemetry for Rubeus Userland ASKTGT PTT."
+      }
+    },
+    "T1574.001": {
+      "id": "T1574.001",
+      "document": "Technique ID: T1574.001\nName: IKEEXT Remote Service DLL Hijack (SDWIN-190403133337)\nTactic: Persistence, Privilege Escalation, Defense Evasion\nDescription: This dataset represents adversaries copying a file remotely to replace a file which is executed by a service that is vulnerable to DLL hijack. This dataset includes\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190403133337) and SIEM telemetry for IKEEXT Remote Service DLL Hijack.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1574.001 (IKEEXT Remote Service DLL Hijack).",
+      "metadata": {
+        "technique_id": "T1574.001",
+        "name": "IKEEXT Remote Service DLL Hijack (SDWIN-190403133337)",
+        "tactic": "Persistence, Privilege Escalation, Defense Evasion",
+        "description": "This dataset represents adversaries copying a file remotely to replace a file which is executed by a service that is vulnerable to DLL hijack. This dataset includes",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1574.001 (IKEEXT Remote Service DLL Hijack).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190403133337) and SIEM telemetry for IKEEXT Remote Service DLL Hijack."
+      }
+    },
+    "T1059.005": {
+      "id": "T1059.005",
+      "document": "Technique ID: T1059.005\nName: Empire VBS Execution (SDWIN-190518182022)\nTactic: Execution\nDescription: This dataset represents adversaries executing a VBS script as a launcher for initial access.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190518182022) and SIEM telemetry for Empire VBS Execution.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1059.005 (Empire VBS Execution).",
+      "metadata": {
+        "technique_id": "T1059.005",
+        "name": "Empire VBS Execution (SDWIN-190518182022)",
+        "tactic": "Execution",
+        "description": "This dataset represents adversaries executing a VBS script as a launcher for initial access.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1059.005 (Empire VBS Execution).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190518182022) and SIEM telemetry for Empire VBS Execution."
+      }
+    },
+    "T1546.003": {
+      "id": "T1546.003",
+      "document": "Technique ID: T1546.003\nName: Empire Elevated WMI Eventing (SDWIN-190518184306)\nTactic: Persistence, Privilege Escalation\nDescription: This dataset represents adversaries leveraging WMI subscriptions locally for persistence.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190518184306) and SIEM telemetry for Empire Elevated WMI Eventing.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1546.003 (Empire Elevated WMI Eventing).",
+      "metadata": {
+        "technique_id": "T1546.003",
+        "name": "Empire Elevated WMI Eventing (SDWIN-190518184306)",
+        "tactic": "Persistence, Privilege Escalation",
+        "description": "This dataset represents adversaries leveraging WMI subscriptions locally for persistence.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1546.003 (Empire Elevated WMI Eventing).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190518184306) and SIEM telemetry for Empire Elevated WMI Eventing."
+      }
+    },
+    "T1055.003": {
+      "id": "T1055.003",
+      "document": "Technique ID: T1055.003\nName: Empire PSInject (SDWIN-190518200432)\nTactic: Privilege Escalation, Defense Evasion\nDescription: This dataset represents adversaries reflectively loading/intecting a portable executable (PE) (not on disk) into a process via WriteprocessMemory and executed via CreateRemoteThread APIs\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190518200432) and SIEM telemetry for Empire PSInject.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1055.003 (Empire PSInject).",
+      "metadata": {
+        "technique_id": "T1055.003",
+        "name": "Empire PSInject (SDWIN-190518200432)",
+        "tactic": "Privilege Escalation, Defense Evasion",
+        "description": "This dataset represents adversaries reflectively loading/intecting a portable executable (PE) (not on disk) into a process via WriteprocessMemory and executed via CreateRemoteThread APIs",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1055.003 (Empire PSInject).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190518200432) and SIEM telemetry for Empire PSInject."
+      }
+    },
+    "T1069.002": {
+      "id": "T1069.002",
+      "document": "Technique ID: T1069.002\nName: Empire Shell Net Domain Admins (SDWIN-190518201207)\nTactic: Discovery\nDescription: This dataset represents adversaries enumerating members of domain groups (i.e. Domain Admins) via RPC SAMR interface over SMB. Some of the main RPC methods captured over the network are SamrLookupNamesInDomain (Opnum 17) and SamrQueryInformationGroup (Opnum 20) where there are indicators about the specific group name enumerated.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190518201207) and SIEM telemetry for Empire Shell Net Domain Admins.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1069.002 (Empire Shell Net Domain Admins).",
+      "metadata": {
+        "technique_id": "T1069.002",
+        "name": "Empire Shell Net Domain Admins (SDWIN-190518201207)",
+        "tactic": "Discovery",
+        "description": "This dataset represents adversaries enumerating members of domain groups (i.e. Domain Admins) via RPC SAMR interface over SMB. Some of the main RPC methods captured over the network are SamrLookupNamesInDomain (Opnum 17) and SamrQueryInformationGroup (Opnum 20) where there are indicators about the specific group name enumerated.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1069.002 (Empire Shell Net Domain Admins).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190518201207) and SIEM telemetry for Empire Shell Net Domain Admins."
+      }
+    },
+    "T1112": {
+      "id": "T1112",
+      "document": "Technique ID: T1112\nName: Empire WDigest Downgrade (SDWIN-190518201922)\nTactic: Defense Evasion\nDescription: This dataset represents adversaries setting the UseLogonCredential property value from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest key to 1 to enable plain text passwords.\nDetection: Monitor OTRF Security Dataset indicators (SDWIN-190518201922) and SIEM telemetry for Empire WDigest Downgrade.\nMitigations: Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1112 (Empire WDigest Downgrade).",
+      "metadata": {
+        "technique_id": "T1112",
+        "name": "Empire WDigest Downgrade (SDWIN-190518201922)",
+        "tactic": "Defense Evasion",
+        "description": "This dataset represents adversaries setting the UseLogonCredential property value from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest key to 1 to enable plain text passwords.",
+        "mitigations": "Apply least-privilege access controls, audit security telemetry and enforce endpoint/cloud hardening for T1112 (Empire WDigest Downgrade).",
+        "detection": "Monitor OTRF Security Dataset indicators (SDWIN-190518201922) and SIEM telemetry for Empire WDigest Downgrade."
+      }
     }
   },
   "wazuh_rules": {
@@ -354,6 +666,74 @@
           "T1078"
         ],
         "remediation": "Routine benign user activity. No remediation action needed."
+      }
+    },
+    "31103": {
+      "id": "31103",
+      "document": "Wazuh Rule ID: 31103\nSeverity Level: 10\nDescription: Web Server SQL Injection / URI Attack detected in HTTP request (Phát hiện tấn công SQL Injection hoặc khai thác URI trên máy chủ Web)\nMITRE ATT&CK IDs: T1190\nRemediation: Block offending source IP on WAF and perimeter firewall via Wazuh Active Response. Inspect web server access logs and database queries for unauthorized data extraction. Patch vulnerable web endpoints and enforce parameterized SQL statements.",
+      "metadata": {
+        "rule_id": "31103",
+        "level": 10,
+        "description": "Web Server SQL Injection / URI Attack detected in HTTP request (Phát hiện tấn công SQL Injection hoặc khai thác URI trên máy chủ Web)",
+        "mitre_ids": [
+          "T1190"
+        ],
+        "remediation": "Block offending source IP on WAF and perimeter firewall via Wazuh Active Response. Inspect web server access logs and database queries for unauthorized data extraction. Patch vulnerable web endpoints and enforce parameterized SQL statements."
+      }
+    },
+    "31168": {
+      "id": "31168",
+      "document": "Wazuh Rule ID: 31168\nSeverity Level: 12\nDescription: Web Shell execution / Suspicious file upload detected on web server (Phát hiện tải lên và thực thi mã độc Web Shell trên máy chủ Web)\nMITRE ATT&CK IDs: T1505.003, T1059.004\nRemediation: Quarantine the web server host immediately. Delete the uploaded web shell file and terminate any child bash/sh processes spawned by www-data/nginx/apache. Audit file upload handlers and revoke compromised service credentials.",
+      "metadata": {
+        "rule_id": "31168",
+        "level": 12,
+        "description": "Web Shell execution / Suspicious file upload detected on web server (Phát hiện tải lên và thực thi mã độc Web Shell trên máy chủ Web)",
+        "mitre_ids": [
+          "T1505.003",
+          "T1059.004"
+        ],
+        "remediation": "Quarantine the web server host immediately. Delete the uploaded web shell file and terminate any child bash/sh processes spawned by www-data/nginx/apache. Audit file upload handlers and revoke compromised service credentials."
+      }
+    },
+    "5402": {
+      "id": "5402",
+      "document": "Wazuh Rule ID: 5402\nSeverity Level: 9\nDescription: Linux Sudo privilege escalation to root (Người dùng Linux thực thi lệnh sudo leo thang đặc quyền lên root)\nMITRE ATT&CK IDs: T1548.003\nRemediation: Verify if the sudo command execution was authorized. If unauthorized, terminate the user session, revoke sudo privileges in /etc/sudoers, lock the compromised Linux account, and audit root command history.",
+      "metadata": {
+        "rule_id": "5402",
+        "level": 9,
+        "description": "Linux Sudo privilege escalation to root (Người dùng Linux thực thi lệnh sudo leo thang đặc quyền lên root)",
+        "mitre_ids": [
+          "T1548.003"
+        ],
+        "remediation": "Verify if the sudo command execution was authorized. If unauthorized, terminate the user session, revoke sudo privileges in /etc/sudoers, lock the compromised Linux account, and audit root command history."
+      }
+    },
+    "100501": {
+      "id": "100501",
+      "document": "Wazuh Rule ID: 100501\nSeverity Level: 14\nDescription: Ransomware Shadow Copy Deletion via vssadmin / wbadmin (Phát hiện hành vi xóa Volume Shadow Copies chuẩn bị mã hóa Ransomware)\nMITRE ATT&CK IDs: T1490, T1486\nRemediation: Execute immediate emergency host isolation from the network. Kill the vssadmin.exe/wbadmin.exe and parent ransomware processes. Preserve memory dump for forensics and restore affected volumes from offline immutable backups.",
+      "metadata": {
+        "rule_id": "100501",
+        "level": 14,
+        "description": "Ransomware Shadow Copy Deletion via vssadmin / wbadmin (Phát hiện hành vi xóa Volume Shadow Copies chuẩn bị mã hóa Ransomware)",
+        "mitre_ids": [
+          "T1490",
+          "T1486"
+        ],
+        "remediation": "Execute immediate emergency host isolation from the network. Kill the vssadmin.exe/wbadmin.exe and parent ransomware processes. Preserve memory dump for forensics and restore affected volumes from offline immutable backups."
+      }
+    },
+    "201001": {
+      "id": "201001",
+      "document": "Wazuh Rule ID: 201001\nSeverity Level: 11\nDescription: Suricata NIDS ET EXPLOIT / C2 Traffic Detected (Cảnh báo Suricata phát hiện lưu lượng khai thác lỗ hổng hoặc kết nối máy chủ điều khiển C2)\nMITRE ATT&CK IDs: T1071.001, T1190\nRemediation: Block external C2 / attacker IP address at perimeter firewall and IPS. Isolate internal source host, capture PCAP network traffic for deep packet inspection, and terminate suspicious outbound processes.",
+      "metadata": {
+        "rule_id": "201001",
+        "level": 11,
+        "description": "Suricata NIDS ET EXPLOIT / C2 Traffic Detected (Cảnh báo Suricata phát hiện lưu lượng khai thác lỗ hổng hoặc kết nối máy chủ điều khiển C2)",
+        "mitre_ids": [
+          "T1071.001",
+          "T1190"
+        ],
+        "remediation": "Block external C2 / attacker IP address at perimeter firewall and IPS. Isolate internal source host, capture PCAP network traffic for deep packet inspection, and terminate suspicious outbound processes."
       }
     }
   }

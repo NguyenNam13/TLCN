@@ -9,14 +9,22 @@ State Transition History và Human-In-The-Loop (HITL) Analyst Approval Hook.
 
 from typing import Dict, Any, List, Optional, Callable, Tuple, Generator, Union
 from datetime import datetime, timezone
-import copy
 import logging
+import threading
+
+# Tích hợp LangGraph chính thống theo mô hình Adapter/Facade Pattern
+try:
+    from langgraph.graph import StateGraph as LangGraphStateGraph, START as LG_START, END as LG_END
+    from langgraph.checkpoint.memory import MemorySaver
+    HAS_LANGGRAPH = True
+except ImportError:
+    HAS_LANGGRAPH = False
+    LG_START = "__start__"
+    LG_END = "__end__"
 
 from src.core.schemas import (
     IncidentStatus,
     SeverityLevel,
-    ActionType,
-    RawLogInput,
     ParsedEvent,
     TriageOutput,
     IoCItem,
@@ -24,11 +32,11 @@ from src.core.schemas import (
     ProcessNode,
     RootCauseAnalysis,
     RecommendedAction,
+    ActionType,
     IncidentReport,
-    WazuhAlert,
 )
 from src.core.state import IncidentState, StateTransition
-from src.core.hitl_manager import HITLManager, HITLDecision, DecisionType
+from src.core.hitl_manager import HITLManager, HITLDecision
 from src.tools.parsers import LogParserTool
 from src.tools.playbooks import ResponsePlaybooks
 
@@ -42,10 +50,9 @@ END = "__end__"
 class StateGraphOrchestrator:
     """Khung điều phối StateGraph quản lý vòng đời điều tra sự cố an ninh mạng.
     
-    Tuân thủ triết lý LangGraph:
-    - State: `IncidentState` tập trung, bất biến qua từng snapshot.
-    - Nodes: Các đơn vị xử lý chuyên biệt (Ingestion, Triage, Enrichment, RCA, Response, HITL, Reporting).
-    - Edges: Các cạnh chuyển tiếp trực tiếp hoặc rẽ nhánh có điều kiện (Conditional Routing).
+    Tuân thủ triết lý LangGraph (Adapter/Facade Pattern):
+    - Bên ngoài: Duy trì 100% API tương thích ngược (.invoke, .stream, .step, .nodes, .edges, .conditional_edges).
+    - Bên trong: Đồng bộ hóa cấu trúc đồ thị vào `langgraph.graph.StateGraph(IncidentState)` chính thống.
     - Checkpointer: Lưu trữ trạng thái sau từng Node.
     - HITL Hook & HITL Manager: Tạm dừng hoặc yêu cầu phê duyệt từ chuyên viên SOC trước khi thực hiện hành động ngăn chặn.
     """
@@ -64,6 +71,7 @@ class StateGraphOrchestrator:
         rca_agent: Optional[Any] = None,
         response_agent: Optional[Any] = None,
         reporting_agent: Optional[Any] = None,
+        enable_parallel_investigation: bool = False,
     ):
         self.checkpointer = checkpointer if checkpointer is not None else {}
         self.hitl_hook = hitl_hook
@@ -77,12 +85,19 @@ class StateGraphOrchestrator:
         self.rca_agent = rca_agent
         self.response_agent = response_agent
         self.reporting_agent = reporting_agent
+        self.enable_parallel_investigation = enable_parallel_investigation
         
-        # Cấu trúc đồ thị điều phối
+        # Cấu trúc đồ thị điều phối (Facade attributes)
         self.nodes: Dict[str, Callable[[IncidentState], IncidentState]] = {}
         self.edges: Dict[str, str] = {}
         self.conditional_edges: Dict[str, Tuple[Callable[[IncidentState], str], Dict[str, str]]] = {}
         self.entry_point: str = "ingestion"
+
+        # Internal LangGraph StateGraph Adapter & MemorySaver Checkpointer
+        self._lg_builder: Optional[Any] = LangGraphStateGraph(IncidentState) if HAS_LANGGRAPH else None
+        self._compiled_app: Optional[Any] = None
+        self._memory_saver = MemorySaver() if HAS_LANGGRAPH else None
+        self._checkpoint_lock = threading.Lock()
         
         # Khởi tạo đồ thị chuẩn
         self._build_default_graph()
@@ -91,13 +106,23 @@ class StateGraphOrchestrator:
     # 1. GRAPH DEFINITION & REGISTRATION (Tương thích LangGraph StateGraph)
     # =====================================================================
     def add_node(self, name: str, func: Callable[[IncidentState], IncidentState]) -> "StateGraphOrchestrator":
-        """Đăng ký một Node xử lý vào đồ thị."""
+        """Đăng ký một Node xử lý vào đồ thị Facade và đồng bộ vào LangGraph StateGraph."""
         self.nodes[name] = func
+        if self._lg_builder is not None:
+            def _node_adapter(state: IncidentState) -> IncidentState:
+                return func(state)
+            self._lg_builder.add_node(name, _node_adapter)
+        self._compiled_app = None
         return self
 
     def add_edge(self, from_node: str, to_node: str) -> "StateGraphOrchestrator":
         """Đăng ký một Cạnh chuyển tiếp trực tiếp giữa 2 Node."""
         self.edges[from_node] = to_node
+        if self._lg_builder is not None:
+            src = LG_START if from_node == START else from_node
+            dst = LG_END if to_node == END else to_node
+            self._lg_builder.add_edge(src, dst)
+        self._compiled_app = None
         return self
 
     def add_conditional_edges(
@@ -108,21 +133,46 @@ class StateGraphOrchestrator:
     ) -> "StateGraphOrchestrator":
         """Đăng ký Cạnh rẽ nhánh có điều kiện dựa trên kết quả của Node nguồn."""
         self.conditional_edges[source_node] = (condition_fn, path_map)
+        if self._lg_builder is not None:
+            lg_path_map = {k: (LG_END if v == END else v) for k, v in path_map.items()}
+            self._lg_builder.add_conditional_edges(source_node, condition_fn, lg_path_map)
+        self._compiled_app = None
         return self
 
     def set_entry_point(self, node_name: str) -> "StateGraphOrchestrator":
         """Thiết lập Node đầu vào của đồ thị."""
         self.entry_point = node_name
+        if self._lg_builder is not None:
+            self._lg_builder.add_edge(LG_START, node_name)
+        self._compiled_app = None
         return self
+
+    def compile(self, checkpointer: Any = None) -> Any:
+        """Biên dịch sang CompiledGraph chính thức của LangGraph."""
+        if not HAS_LANGGRAPH or self._lg_builder is None:
+            raise RuntimeError("Thư viện 'langgraph' chưa được cài đặt hoặc không khả dụng.")
+        cp = checkpointer if checkpointer is not None else self._memory_saver
+        self._compiled_app = self._lg_builder.compile(checkpointer=cp)
+        return self._compiled_app
+
+    def get_langgraph_app(self) -> Any:
+        """Lấy đối tượng CompiledGraph của LangGraph đã được biên dịch."""
+        if self._compiled_app is None:
+            return self.compile()
+        return self._compiled_app
 
     def _build_default_graph(self):
         """Xây dựng đồ thị điều phối chuẩn của hệ thống SOC Multi-Agent."""
+        # Thiết lập Entry Point đầu vào cho đồ thị
+        self.set_entry_point("ingestion")
+
         # Đăng ký các Node
         self.add_node("ingestion", self.ingestion_node)
         self.add_node("triage", self.triage_node)
         self.add_node("closed_fp", self.closed_false_positive_node)
         self.add_node("enrichment", self.enrichment_node)
         self.add_node("rca", self.rca_node)
+        self.add_node("parallel_investigation", self.parallel_investigation_node)
         self.add_node("response", self.response_node)
         self.add_node("hitl_approval", self.hitl_approval_node)
         self.add_node("reporting", self.reporting_node)
@@ -130,22 +180,35 @@ class StateGraphOrchestrator:
         # Cạnh nối từ Entry Point sang Triage
         self.add_edge("ingestion", "triage")
 
-        # Cạnh điều kiện từ Triage: True Positive -> Enrichment, False Positive -> closed_fp
-        self.add_conditional_edges(
-            source_node="triage",
-            condition_fn=self.route_triage_decision,
-            path_map={
-                "investigate": "enrichment",
-                "false_positive": "closed_fp"
-            }
-        )
-
         # Cạnh kết thúc của False Positive
         self.add_edge("closed_fp", END)
 
-        # Pipeline điều tra chuyên sâu (Investigation Track)
-        self.add_edge("enrichment", "rca")
-        self.add_edge("rca", "response")
+        if getattr(self, "enable_parallel_investigation", False):
+            # Nhánh điều tra song song (Fork-Join DAG tương ứng cụm PARALLEL AGENTS trên sơ đồ)
+            self.add_conditional_edges(
+                source_node="triage",
+                condition_fn=self.route_triage_decision,
+                path_map={
+                    "investigate": "parallel_investigation",
+                    "false_positive": "closed_fp"
+                }
+            )
+            self.add_edge("parallel_investigation", "response")
+            # Đảm bảo cạnh rca -> response luôn có sẵn nếu chuyên viên yêu cầu retry_rca từ Feedback Loop
+            self.add_edge("rca", "response")
+        else:
+            # Pipeline điều tra chuyên sâu tuần tự mặc định (Enrichment -> RCA -> Response)
+            self.add_conditional_edges(
+                source_node="triage",
+                condition_fn=self.route_triage_decision,
+                path_map={
+                    "investigate": "enrichment",
+                    "false_positive": "closed_fp"
+                }
+            )
+            self.add_edge("enrichment", "rca")
+            self.add_edge("rca", "response")
+
         self.add_edge("response", "hitl_approval")
 
         # Cạnh điều kiện từ HITL (Feedback Loop & Backtracking):
@@ -472,6 +535,83 @@ class StateGraphOrchestrator:
         self._checkpoint(state, "rca")
         return state
 
+    def parallel_investigation_node(self, state: IncidentState) -> IncidentState:
+        """Node điều tra song song (Fork-Join DAG): Threat Intel CTI || Root Cause Analysis (RCA).
+        
+        Thực thi đồng thời Threat Intel enrichment và RCA phân tích chuỗi tiến trình bằng ThreadPoolExecutor.
+        Sau đó Fan-in (Join) tổng hợp kết quả CTI và RCA vào chung IncidentState.
+        """
+        import concurrent.futures
+
+        logger.info(f"[{state.incident_id}] Kích hoạt Parallel Investigation Node (Threat Intel CTI || RCA)...")
+
+        # Fork: Tạo 2 bản sao độc lập của state để tránh xung đột dữ liệu khi chạy song song
+        state_cti = state.model_copy(deep=True)
+        state_rca = state.model_copy(deep=True)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_cti = executor.submit(self.enrichment_node, state_cti)
+            future_rca = executor.submit(self.rca_node, state_rca)
+
+            try:
+                res_cti = future_cti.result()
+            except Exception as ex_cti:
+                logger.error(f"[{state.incident_id}] Lỗi thực thi nhánh Threat Intel song song: {ex_cti}", exc_info=True)
+                res_cti = state_cti
+                res_cti.threat_intel = ThreatIntelEnrichment(enrichment_summary=f"Lỗi tra cứu CTI: {ex_cti}")
+
+            try:
+                res_rca = future_rca.result()
+            except Exception as ex_rca:
+                logger.error(f"[{state.incident_id}] Lỗi thực thi nhánh RCA song song: {ex_rca}", exc_info=True)
+                res_rca = state_rca
+                res_rca.rca_result = RootCauseAnalysis(
+                    initial_access_vector="Unknown (Analysis Failed)",
+                    root_cause_summary=f"Phân tích RCA gặp sự cố ngoại lệ: {ex_rca}"
+                )
+
+        # Join: Tổng hợp kết quả từ hai nhánh điều tra
+        state.threat_intel = res_cti.threat_intel
+        state.rca_result = res_rca.rca_result
+        if res_rca.attack_type:
+            state.attack_type = res_rca.attack_type
+
+        # Gộp snapshots từ checkpoints của hai nhánh
+        if hasattr(res_cti, "checkpoints") and res_cti.checkpoints:
+            state.checkpoints.update(res_cti.checkpoints)
+        if hasattr(res_rca, "checkpoints") and res_rca.checkpoints:
+            state.checkpoints.update(res_rca.checkpoints)
+
+        # Cập nhật mức độ nghiêm trọng nếu Threat Intel phát hiện IoC nguy hiểm
+        if res_cti.triage_result and state.triage_result:
+            if res_cti.triage_result.severity != state.triage_result.severity:
+                state.triage_result.severity = res_cti.triage_result.severity
+                state.triage_result.summary = res_cti.triage_result.summary
+
+        # Hợp nhất lịch sử chuyển trạng thái từ hai nhánh
+        existing_nodes = {h.node for h in state.history}
+        for transition in res_cti.history:
+            if transition.node in ("enrichment", "ThreatIntelAgent") and transition.node not in existing_nodes:
+                state.history.append(transition)
+                existing_nodes.add(transition.node)
+        for transition in res_rca.history:
+            if transition.node in ("rca", "RCAAgent") and transition.node not in existing_nodes:
+                state.history.append(transition)
+                existing_nodes.add(transition.node)
+
+        state.record_transition(
+            node="parallel_investigation",
+            to_status=IncidentStatus.INVESTIGATING,
+            message="Hoàn tất điều tra song song đa tác tử (Threat Intel CTI || RCA) theo mô hình Fork-Join",
+            metadata={
+                "parallel_workers": 2,
+                "has_threat_intel": state.threat_intel is not None,
+                "has_rca": state.rca_result is not None,
+            }
+        )
+        self._checkpoint(state, "parallel_investigation")
+        return state
+
     def response_node(self, state: IncidentState) -> IncidentState:
         """Node Response Recommendation: Đề xuất hành động ngăn chặn & khắc phục theo NIST SP 800-61."""
         logger.info(f"[{state.incident_id}] Thực thi Response Node...")
@@ -523,47 +663,29 @@ class StateGraphOrchestrator:
         # 1. Gọi hook nếu được cấu hình từ ngoài
         if self.hitl_hook is not None:
             state = self.hitl_hook(state)
-        elif self.hitl_manager is not None:
-            # Đánh giá qua hitl_manager
-            pending = self.hitl_manager.get_pending_actions(state)
-            if pending and not self.auto_approve and state.analyst_approved is None:
-                state.record_transition(
-                    node="hitl_approval",
-                    to_status=IncidentStatus.AWAITING_APPROVAL,
-                    message=f"Tạm dừng chờ chuyên viên phê duyệt {len(pending)} hành động ứng phó",
-                    metadata={"pending_count": len(pending), "awaiting_approval": True}
-                )
-                self._checkpoint(state, "hitl_approval")
-                return state
-            elif self.auto_approve and state.analyst_approved is None:
-                state = self.hitl_manager.approve_all(
-                    state,
-                    analyst_id="soc_analyst_01",
-                    notes="Tự động phê duyệt bởi Giám sát An toàn (Automated Safety Policy)"
-                )
-            elif not pending and state.analyst_approved is None:
-                state.analyst_approved = True
-                state.analyst_feedback = "Không có hành động yêu cầu phê duyệt thủ công"
         else:
-            # Mặc định: Nếu chưa được gán analyst_approved
+            hitl_mgr = self.hitl_manager or HITLManager()
+            pending = hitl_mgr.get_pending_actions(state)
             if state.analyst_approved is None:
-                pending_actions = [
-                    a for a in state.recommended_actions
-                    if a.require_human_approval and a.is_approved is None
-                ]
-                if pending_actions and not self.auto_approve:
+                if pending and not self.auto_approve:
                     state.record_transition(
                         node="hitl_approval",
                         to_status=IncidentStatus.AWAITING_APPROVAL,
-                        message=f"Tạm dừng chờ chuyên viên phê duyệt {len(pending_actions)} hành động ứng phó",
-                        metadata={"pending_count": len(pending_actions), "awaiting_approval": True}
+                        message=f"Tạm dừng chờ chuyên viên phê duyệt {len(pending)} hành động ứng phó",
+                        metadata={"pending_count": len(pending), "awaiting_approval": True}
                     )
                     self._checkpoint(state, "hitl_approval")
                     return state
                 elif self.auto_approve:
-                    # Mặc định auto-approve trong chế độ tự động hóa có kiểm soát
-                    state.analyst_approved = True
-                    state.analyst_feedback = "Tự động phê duyệt bởi Giám sát An toàn (Automated Safety Policy)"
+                    if self.hitl_manager is not None:
+                        state = self.hitl_manager.approve_all(
+                            state,
+                            analyst_id="soc_analyst_01",
+                            notes="Tự động phê duyệt bởi Giám sát An toàn (Automated Safety Policy)"
+                        )
+                    else:
+                        state.analyst_approved = True
+                        state.analyst_feedback = "Tự động phê duyệt bởi Giám sát An toàn (Automated Safety Policy)"
                 else:
                     state.analyst_approved = True
                     state.analyst_feedback = "Không có hành động yêu cầu phê duyệt thủ công"
@@ -572,13 +694,8 @@ class StateGraphOrchestrator:
         for action in state.recommended_actions:
             if state.analyst_approved is False:
                 action.is_approved = False
-            elif action.require_human_approval:
-                if action.is_approved is None:
-                    action.is_approved = state.analyst_approved
-            else:
-                # Hành động không yêu cầu phê duyệt được tự động duyệt thực thi
-                if action.is_approved is None:
-                    action.is_approved = True
+            elif action.is_approved is None:
+                action.is_approved = state.analyst_approved if action.require_human_approval else True
 
         if state.analyst_approved:
             new_status = IncidentStatus.CONTAINED
@@ -682,6 +799,18 @@ class StateGraphOrchestrator:
     # =====================================================================
     # 3. WORKFLOW EXECUTION ENGINES (invoke, stream, step, resume)
     # =====================================================================
+    def _get_next_node(self, current_node: str, state: IncidentState) -> str:
+        """Xác định Node kế tiếp trong đồ thị dựa trên conditional_edges hoặc edges."""
+        if current_node in self.conditional_edges:
+            condition_fn, path_map = self.conditional_edges[current_node]
+            branch_key = condition_fn(state)
+            next_node = path_map.get(branch_key, END)
+            logger.debug(f"Conditional Edge [{current_node}] -> '{branch_key}' -> [{next_node}]")
+            return next_node
+        if current_node in self.edges:
+            return self.edges[current_node]
+        return END
+
     def invoke(
         self,
         state: Union[IncidentState, Dict[str, Any]],
@@ -715,18 +844,7 @@ class StateGraphOrchestrator:
                 )
                 break
 
-            # Xác định Node kế tiếp
-            if current_node in self.conditional_edges:
-                condition_fn, path_map = self.conditional_edges[current_node]
-                branch_key = condition_fn(current_state)
-                next_node = path_map.get(branch_key, END)
-                logger.debug(f"Conditional Edge [{current_node}] -> '{branch_key}' -> [{next_node}]")
-            elif current_node in self.edges:
-                next_node = self.edges[current_node]
-            else:
-                next_node = END
-
-            current_node = next_node
+            current_node = self._get_next_node(current_node, current_state)
 
         if step_count >= max_steps:
             logger.warning(f"Pipeline dừng do đạt giới hạn số bước tối đa ({max_steps})")
@@ -757,16 +875,7 @@ class StateGraphOrchestrator:
                 logger.info(f"[{current_state.incident_id}] Stream dừng tại trạng thái AWAITING_APPROVAL.")
                 break
 
-            if current_node in self.conditional_edges:
-                condition_fn, path_map = self.conditional_edges[current_node]
-                branch_key = condition_fn(current_state)
-                next_node = path_map.get(branch_key, END)
-            elif current_node in self.edges:
-                next_node = self.edges[current_node]
-            else:
-                next_node = END
-
-            current_node = next_node
+            current_node = self._get_next_node(current_node, current_state)
 
     def step(
         self,
@@ -785,15 +894,7 @@ class StateGraphOrchestrator:
         if current_state.status == IncidentStatus.AWAITING_APPROVAL:
             return ("hitl_approval", current_state)
 
-        if current_node in self.conditional_edges:
-            condition_fn, path_map = self.conditional_edges[current_node]
-            branch_key = condition_fn(current_state)
-            next_node = path_map.get(branch_key, END)
-        elif current_node in self.edges:
-            next_node = self.edges[current_node]
-        else:
-            next_node = END
-
+        next_node = self._get_next_node(current_node, current_state)
         return (next_node if next_node != END else None, current_state)
 
     def resume_after_hitl(
@@ -808,7 +909,22 @@ class StateGraphOrchestrator:
 
         # Thực thi tiếp từ node hitl_approval
         state = self.hitl_approval_node(state)
-        state = self.reporting_node(state)
+
+        # Định tuyến theo conditional edge của hitl_approval thay vì cưỡng bức nhảy sang reporting
+        current_node = (
+            self._get_next_node("hitl_approval", state)
+            if "hitl_approval" in self.conditional_edges
+            else "reporting"
+        )
+        step_count = 0
+        while current_node != END and step_count < 25:
+            step_count += 1
+            if current_node not in self.nodes:
+                break
+            node_fn = self.nodes[current_node]
+            state = node_fn(state)
+            current_node = self._get_next_node(current_node, state)
+
         return state
 
     def execute_until_interrupt(
@@ -836,27 +952,14 @@ class StateGraphOrchestrator:
 
             # Kiểm tra điểm ngắt HITL trước khi thực thi node hitl_approval
             if current_node == "hitl_approval":
-                has_pending = False
-                if self.hitl_manager is not None:
-                    has_pending = not self.hitl_manager.is_approval_complete(current_state)
-                else:
-                    has_pending = any(
-                        a.require_human_approval and a.is_approved is None
-                        for a in current_state.recommended_actions
-                    )
-
-                # Nếu có hành động chờ duyệt và auto_approve=False (hoặc analyst_approved is None)
-                if has_pending and not self.auto_approve and current_state.analyst_approved is None:
-                    pending_cnt = (
-                        len(self.hitl_manager.get_pending_actions(current_state))
-                        if self.hitl_manager
-                        else len([a for a in current_state.recommended_actions if a.require_human_approval and a.is_approved is None])
-                    )
+                hitl_mgr = self.hitl_manager or HITLManager()
+                pending = hitl_mgr.get_pending_actions(current_state)
+                if pending and not self.auto_approve and current_state.analyst_approved is None:
                     current_state.record_transition(
                         node="hitl_approval",
                         to_status=IncidentStatus.AWAITING_APPROVAL,
                         message="Pipeline tạm dừng tại điểm ngắt HITL - Đang chờ chuyên viên phê duyệt hành động",
-                        metadata={"awaiting_approval": True, "pending_count": pending_cnt}
+                        metadata={"awaiting_approval": True, "pending_count": len(pending)}
                     )
                     self._checkpoint(current_state, "hitl_approval")
                     logger.info(f"[{current_state.incident_id}] Pipeline tạm dừng (is_paused=True) tại Node hitl_approval.")
@@ -870,18 +973,7 @@ class StateGraphOrchestrator:
             if current_state.status == IncidentStatus.AWAITING_APPROVAL:
                 return (True, current_state)
 
-            # Xác định Node kế tiếp
-            if current_node in self.conditional_edges:
-                condition_fn, path_map = self.conditional_edges[current_node]
-                branch_key = condition_fn(current_state)
-                next_node = path_map.get(branch_key, END)
-                logger.debug(f"Conditional Edge [{current_node}] -> '{branch_key}' -> [{next_node}]")
-            elif current_node in self.edges:
-                next_node = self.edges[current_node]
-            else:
-                next_node = END
-
-            current_node = next_node
+            current_node = self._get_next_node(current_node, current_state)
 
         return (False, current_state)
 
@@ -923,17 +1015,7 @@ class StateGraphOrchestrator:
 
             node_fn = self.nodes[current_node]
             current_state = node_fn(current_state)
-
-            if current_node in self.conditional_edges:
-                condition_fn, path_map = self.conditional_edges[current_node]
-                branch_key = condition_fn(current_state)
-                next_node = path_map.get(branch_key, END)
-            elif current_node in self.edges:
-                next_node = self.edges[current_node]
-            else:
-                next_node = END
-
-            current_node = next_node
+            current_node = self._get_next_node(current_node, current_state)
 
         return current_state
 
@@ -941,7 +1023,7 @@ class StateGraphOrchestrator:
     # 4. CHECKPOINT & STATE HISTORY UTILITIES
     # =====================================================================
     def _checkpoint(self, state: IncidentState, node_name: str):
-        """Lưu snapshot dữ liệu vào bộ nhớ checkpoints."""
+        """Lưu snapshot dữ liệu vào bộ nhớ checkpoints một cách an toàn đa luồng."""
         snapshot = {
             "node": node_name,
             "status": state.status.value,
@@ -953,9 +1035,15 @@ class StateGraphOrchestrator:
             "has_report": state.final_report is not None,
         }
         state.checkpoints[node_name] = snapshot
-        if state.incident_id not in self.checkpointer:
-            self.checkpointer[state.incident_id] = {}
-        self.checkpointer[state.incident_id][node_name] = snapshot
+        lock = getattr(self, "_checkpoint_lock", None)
+        if lock is not None:
+            with lock:
+                inc_cps = self.checkpointer.setdefault(state.incident_id, {})
+                inc_cps[node_name] = snapshot
+        else:
+            if state.incident_id not in self.checkpointer:
+                self.checkpointer[state.incident_id] = {}
+            self.checkpointer[state.incident_id][node_name] = snapshot
 
     def get_checkpoint(self, state: IncidentState, node_name: str) -> Optional[Dict[str, Any]]:
         """Lấy snapshot checkpoint tại một node bất kỳ."""
@@ -1073,8 +1161,19 @@ class StateGraphOrchestrator:
             rule_or_model="Builtin-Heuristic-Engine"
         )
 
-    def to_mermaid(self) -> str:
-        """Xuất biểu đồ quy trình điều phối StateGraph sang cú pháp Mermaid Flowchart."""
+    def to_mermaid(self, use_langgraph_engine: bool = False) -> str:
+        """Xuất biểu đồ quy trình điều phối StateGraph sang cú pháp Mermaid Flowchart.
+        
+        :param use_langgraph_engine: Nếu True và có compiled LangGraph app, dùng draw_mermaid() của LangGraph.
+                                     Mặc định False để duy trì 100% định dạng flowchart TD mà các unit tests kiểm tra.
+        """
+        if use_langgraph_engine and HAS_LANGGRAPH:
+            try:
+                app = self.get_langgraph_app()
+                return app.get_graph().draw_mermaid()
+            except Exception as e:
+                logger.warning(f"Không thể sinh mermaid từ LangGraph app: {e}")
+
         mermaid_lines = [
             "flowchart TD",
             "    START([__start__]) --> ingestion[Ingestion Node]",
@@ -1110,6 +1209,7 @@ def create_full_soc_pipeline(
     rca_agent: Optional[Any] = None,
     response_agent: Optional[Any] = None,
     reporting_agent: Optional[Any] = None,
+    enable_parallel_investigation: bool = False,
     auto_instantiate_missing: bool = True,
 ) -> StateGraphOrchestrator:
     """Tạo đối tượng StateGraphOrchestrator với đầy đủ 6 Agent chuyên biệt (Prototype v0.1).
@@ -1151,6 +1251,7 @@ def create_full_soc_pipeline(
         hitl_manager=hitl_manager,
         auto_approve=auto_approve,
         enable_feedback_loop=enable_feedback_loop,
+        enable_parallel_investigation=enable_parallel_investigation,
         max_reanalysis=max_reanalysis,
         ingestion_agent=ingestion_agent,
         triage_agent=triage_agent,

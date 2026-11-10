@@ -13,11 +13,12 @@ Cổng tiếp nhận cảnh báo tự động qua Webhook từ máy chủ Wazuh 
 import os
 import json
 import hmac
+import hashlib
 import uuid
 import logging
 import ipaddress
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union
 
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, Response
@@ -25,7 +26,7 @@ from starlette.routing import Route
 from starlette.requests import Request
 from starlette.background import BackgroundTasks
 
-from src.core.schemas import WazuhAlert, IncidentStatus
+from src.core.schemas import IncidentStatus
 from src.core.incident_store import IncidentStore
 from src.agents.ingestion_agent import IngestionAgent
 from src.core.orchestrator import StateGraphOrchestrator
@@ -36,7 +37,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(n
 # Cấu hình môi trường mặc định (hỗ trợ toàn bộ dải mạng ảo 172.16.65.0/24 cho Wazuh DHCP động)
 DEFAULT_SECRET = "soc-super-secret-token-2026"
 WAZUH_WEBHOOK_SECRET = os.getenv("WAZUH_WEBHOOK_SECRET", DEFAULT_SECRET)
-WAZUH_ALLOWED_IPS_RAW = os.getenv("WAZUH_ALLOWED_IPS", "172.16.65.0/24,127.0.0.1,localhost,testclient")
+if not os.getenv("WAZUH_WEBHOOK_SECRET") or os.getenv("WAZUH_WEBHOOK_SECRET") == DEFAULT_SECRET:
+    logger.warning(
+        "⚠️ CẢNH BÁO BẢO MẬT: WAZUH_WEBHOOK_SECRET đang sử dụng giá trị mặc định (dev secret). "
+        "Hãy thiết lập biến môi trường WAZUH_WEBHOOK_SECRET với khóa bí mật mạnh trong môi trường production!"
+    )
+WAZUH_ALLOWED_IPS_RAW = os.getenv("WAZUH_ALLOWED_IPS", "172.16.65.0/24,127.0.0.1,localhost")
 WAZUH_ALLOWED_IPS = [ip.strip() for ip in WAZUH_ALLOWED_IPS_RAW.split(",") if ip.strip()]
 WAZUH_MIN_LEVEL = int(os.getenv("WAZUH_MIN_LEVEL", "7"))
 MAX_BODY_SIZE = int(os.getenv("MAX_BODY_SIZE", str(2 * 1024 * 1024)))  # 2MB
@@ -63,47 +69,88 @@ class WebhookService:
             auto_approve=self.auto_approve
         )
         self.secret_token = secret_token or WAZUH_WEBHOOK_SECRET
+        if self.secret_token == DEFAULT_SECRET:
+            logger.warning(
+                "⚠️ WebhookService: Đang sử dụng secret token mặc định. "
+                "Khuyến nghị cấu hình biến môi trường WAZUH_WEBHOOK_SECRET cho production."
+            )
         self.allowed_ips = allowed_ips or WAZUH_ALLOWED_IPS
         self.min_level = min_level if min_level is not None else WAZUH_MIN_LEVEL
 
-    def verify_auth(self, request: Request) -> Tuple[bool, Optional[str]]:
+    @staticmethod
+    def compute_hmac_sha256(secret: str, payload: Union[bytes, str]) -> str:
+        """Tính toán chữ ký HMAC-SHA256 dạng hex từ secret và payload bytes."""
+        if isinstance(payload, str):
+            payload = payload.encode("utf-8")
+        return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
+    def verify_auth(self, request: Request, raw_body: Optional[bytes] = None) -> Tuple[bool, Optional[str]]:
         """
         Xác thực tính hợp lệ của request từ Wazuh OVA:
-        1. Kiểm tra Token bí mật bằng constant-time hmac.compare_digest.
-        2. Kiểm tra IP nguồn kết nối TCP trực tiếp (hỗ trợ cả dải mạng CIDR ví dụ 172.16.65.0/24).
+        1. Kiểm tra IP nguồn kết nối TCP trực tiếp (hỗ trợ cả dải mạng CIDR ví dụ 172.16.65.0/24).
+        2. Xác thực tính toàn vẹn và nguồn gốc qua HMAC-SHA256 signature (X-Wazuh-Signature-SHA256 hoặc X-Hub-Signature-256).
+        3. Hỗ trợ xác thực Secret Token cũ (X-Wazuh-Secret-Token hoặc X-Wazuh-Secret) để tương thích ngược.
         """
         # 1. Kiểm tra IP nguồn
         client_host = request.client.host if request.client else None
         if "*" not in self.allowed_ips:
             is_ip_ok = False
             if client_host:
-                if client_host in self.allowed_ips or "testclient" in self.allowed_ips:
+                if client_host in self.allowed_ips:
                     is_ip_ok = True
                 else:
                     try:
                         client_ip_obj = ipaddress.ip_address(client_host)
-                        for allowed in self.allowed_ips:
-                            if "/" in allowed:
-                                if client_ip_obj in ipaddress.ip_network(allowed, strict=False):
-                                    is_ip_ok = True
-                                    break
-                            elif allowed == client_host:
-                                    is_ip_ok = True
-                                    break
+                        is_ip_ok = any(
+                            client_ip_obj in ipaddress.ip_network(allowed, strict=False)
+                            for allowed in self.allowed_ips
+                            if "/" in allowed
+                        )
                     except ValueError:
                         pass
             if not is_ip_ok:
                 return False, f"Access denied: Untrusted Source IP ({client_host})"
 
-        # 2. Kiểm tra Secret Token qua header X-Wazuh-Secret-Token hoặc X-Wazuh-Secret
+        # 2. Lấy thông tin Header xác thực (Signature hoặc Token)
+        sig_header = (
+            request.headers.get("X-Wazuh-Signature-SHA256")
+            or request.headers.get("X-Hub-Signature-256")
+            or request.headers.get("X-Wazuh-Signature")
+        )
         token = request.headers.get("X-Wazuh-Secret-Token") or request.headers.get("X-Wazuh-Secret")
         if not token:
-            return False, "Missing authentication token in header"
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+            elif auth_header.startswith("Token "):
+                token = auth_header[6:].strip()
 
-        if not hmac.compare_digest(token.encode("utf-8"), self.secret_token.encode("utf-8")):
-            return False, "Invalid authentication token"
+        if not sig_header and not token:
+            return False, "Missing authentication token or signature in header"
 
-        return True, None
+        # 2a. Xác thực HMAC-SHA256 nếu có header chữ ký
+        if sig_header:
+            if raw_body is None:
+                raw_body = getattr(request, "_body", b"")
+            if not isinstance(raw_body, bytes):
+                raw_body = str(raw_body).encode("utf-8")
+
+            clean_sig = sig_header.strip()
+            if clean_sig.lower().startswith("sha256="):
+                clean_sig = clean_sig[7:].strip()
+
+            expected_sig = self.compute_hmac_sha256(self.secret_token, raw_body)
+            if not hmac.compare_digest(clean_sig.lower(), expected_sig.lower()):
+                return False, "Invalid HMAC-SHA256 signature"
+            return True, None
+
+        # 2b. Xác thực Secret Token (Backward compatibility)
+        if token:
+            if not hmac.compare_digest(token.encode("utf-8"), self.secret_token.encode("utf-8")):
+                return False, "Invalid authentication token"
+            return True, None
+
+        return False, "Unauthorized request"
 
     def process_alert_background(self, alert_dict: Dict[str, Any], incident_id: str):
         """
@@ -154,7 +201,13 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
         )
 
     async def list_recent_incidents(request: Request) -> JSONResponse:
-        """Lấy danh sách các sự cố mới nhất nhận từ Webhook."""
+        """Lấy danh sách các sự cố mới nhất nhận từ Webhook (có xác thực an toàn)."""
+        is_auth, auth_err = svc.verify_auth(request)
+        if not is_auth:
+            return JSONResponse(
+                {"status": "error", "error": f"Unauthorized: {auth_err}"},
+                status_code=401,
+            )
         limit = int(request.query_params.get("limit", 20))
         incidents = svc.incident_store.list_incidents(limit=limit)
         results = [
@@ -174,13 +227,7 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
         """
         Endpoint chính tiếp nhận HTTP POST cảnh báo từ Wazuh OVA.
         """
-        # 1. Xác thực bảo mật
-        is_auth, error_msg = svc.verify_auth(request)
-        if not is_auth:
-            status_code = 403 if "Untrusted Source IP" in (error_msg or "") else 401
-            return JSONResponse({"status": "unauthorized", "error": error_msg}, status_code=status_code)
-
-        # 2. Kiểm tra giới hạn dung lượng Content-Length
+        # 1. Kiểm tra giới hạn dung lượng Content-Length trước khi đọc body
         content_length = request.headers.get("Content-Length")
         if content_length and int(content_length) > MAX_BODY_SIZE:
             return JSONResponse(
@@ -188,7 +235,7 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
                 status_code=413,
             )
 
-        # 3. Đọc và parse JSON Body
+        # 2. Đọc raw body (kiểm tra dung lượng an toàn)
         try:
             body = await request.body()
             if len(body) > MAX_BODY_SIZE:
@@ -196,9 +243,20 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
                     {"status": "error", "error": f"Payload too large (Max: {MAX_BODY_SIZE} bytes)"},
                     status_code=413,
                 )
-            if not body:
-                return JSONResponse({"status": "error", "error": "Empty payload body"}, status_code=400)
-            
+        except Exception as err:
+            return JSONResponse({"status": "error", "error": f"Invalid request body: {str(err)}"}, status_code=400)
+
+        # 3. Xác thực bảo mật (IP Whitelist, HMAC-SHA256 Signature hoặc Secret Token)
+        is_auth, error_msg = svc.verify_auth(request, raw_body=body)
+        if not is_auth:
+            status_code = 403 if "Untrusted Source IP" in (error_msg or "") else 401
+            return JSONResponse({"status": "unauthorized", "error": error_msg}, status_code=status_code)
+
+        # 4. Kiểm tra body rỗng và parse JSON
+        if not body:
+            return JSONResponse({"status": "error", "error": "Empty payload body"}, status_code=400)
+
+        try:
             raw_data = json.loads(body.decode("utf-8"))
         except json.JSONDecodeError as err:
             return JSONResponse({"status": "error", "error": f"Malformed JSON: {str(err)}"}, status_code=400)
@@ -230,8 +288,24 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
                 status_code=200,
             )
 
-        # 6. Khử trùng lặp (Sliding-window Deduplication)
-        if svc.incident_store.is_duplicate_alert(rule_id=rule_id, agent_id=agent_id, window_seconds=30):
+        # 6. Khử trùng lặp đa nguồn (Sliding-window Deduplication with Source IP & User awareness)
+        src_ip = (
+            alert_dict.get("data", {}).get("srcip")
+            or alert_dict.get("srcip")
+            or alert_dict.get("data", {}).get("src_ip")
+        )
+        dst_user = (
+            alert_dict.get("data", {}).get("dstuser")
+            or alert_dict.get("data", {}).get("srcuser")
+            or alert_dict.get("dstuser")
+        )
+        if svc.incident_store.is_duplicate_alert(
+            rule_id=rule_id,
+            agent_id=agent_id,
+            window_seconds=30,
+            src_ip=src_ip,
+            user=dst_user,
+        ):
             return JSONResponse(
                 {
                     "status": "deduplicated",

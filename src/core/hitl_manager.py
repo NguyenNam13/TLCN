@@ -7,7 +7,6 @@ cho từng hành động ứng phó (RecommendedAction), cũng như lưu trữ p
 """
 
 import uuid
-import json
 from enum import Enum
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Union
@@ -64,6 +63,51 @@ class HITLDecision(BaseModel):
     )
 
 
+def _ensure_action_ids(state: IncidentState) -> None:
+    """Đảm bảo mọi hành động trong state đều có action_id hợp lệ."""
+    for idx, action in enumerate(state.recommended_actions):
+        if action.action_id is None:
+            action.action_id = f"ACT-{idx+1:03d}"
+
+
+def _find_action(state: IncidentState, action_id: str) -> RecommendedAction:
+    """Tìm hành động theo action_id trong IncidentState hoặc ném ValueError."""
+    for action in state.recommended_actions:
+        if action.action_id == action_id:
+            return action
+    raise ValueError(f"Không tìm thấy hành động với action_id='{action_id}' trong IncidentState ({state.incident_id})")
+
+
+def _is_reversible(action: RecommendedAction) -> bool:
+    """Kiểm tra hành động có khả nghịch và có rollback_script hợp lệ hay không."""
+    return (
+        action.action_type != ActionType.KILL_PROCESS
+        and action.script_bundle is not None
+        and action.script_bundle.rollback_script is not None
+    )
+
+
+def _mark_action_rolled_back(action: RecommendedAction, reason: str, analyst_id: str) -> None:
+    """Đánh dấu trạng thái và metadata hoàn tác trên hành động."""
+    action.is_approved = False
+    if action.parameters is None:
+        action.parameters = {}
+    action.parameters["rollback_executed"] = True
+    action.parameters["rollback_reason"] = reason
+    action.parameters["rollback_by"] = analyst_id
+    action.parameters["rollback_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _refresh_report_if_needed(state: IncidentState) -> None:
+    """Tự động đồng bộ và tái tạo lại Báo cáo điều tra nếu báo cáo đã được sinh trước đó."""
+    if state.final_report is not None:
+        try:
+            from src.agents.reporting_agent import ReportingAgent
+            state.final_report = ReportingAgent().generate_report(state)
+        except Exception:
+            pass
+
+
 class HITLManager:
     """Quản lý các thao tác tương tác và phê duyệt của con người trong quy trình SOC."""
 
@@ -76,30 +120,104 @@ class HITLManager:
         Điều kiện: require_human_approval=True và is_approved is None.
         Tự động đảm bảo mỗi hành động đều có action_id hợp lệ.
         """
-        pending: List[RecommendedAction] = []
-        for idx, action in enumerate(state.recommended_actions):
-            if action.action_id is None:
-                action.action_id = f"ACT-{idx+1:03d}"
+        _ensure_action_ids(state)
+        return [
+            action for action in state.recommended_actions
+            if action.require_human_approval and action.is_approved is None
+        ]
 
-            if action.require_human_approval and action.is_approved is None:
-                pending.append(action)
-        return pending
+    def validate_action_safety(
+        self,
+        action: Union[RecommendedAction, ActionType, str],
+        target: Optional[str] = None,
+        raise_on_critical: bool = False,
+    ) -> Dict[str, Any]:
+        """Kiểm tra mức độ an toàn của hành động ứng phó.
+        
+        Phát hiện và cảnh báo hoặc chặn các hành động rủi ro cao (đặc biệt là KILL_PROCESS
+        trên các tiến trình hệ thống cốt lõi: svchost.exe, lsass.exe, csrss.exe, explorer.exe, services.exe, smss.exe, wininit.exe).
+        
+        :param action: RecommendedAction, ActionType, hoặc tên chuỗi loại hành động.
+        :param target: Mục tiêu (bắt buộc nếu action là ActionType/str; nếu action là RecommendedAction thì lấy action.target).
+        :param raise_on_critical: Nếu True, ném ValueError khi phát hiện hành động tiêu diệt tiến trình hệ thống.
+        :return: Dict chứa kết quả thẩm định an toàn chi tiết.
+        """
+        from src.tools.playbooks import ResponsePlaybooks, CRITICAL_SYSTEM_PROCESSES
+
+        if isinstance(action, RecommendedAction):
+            act_type = action.action_type
+            act_target = action.target
+            req_approval = action.require_human_approval
+            act_id = action.action_id
+        else:
+            act_type = ActionType(action) if isinstance(action, str) else action
+            act_target = target or ""
+            req_approval = True
+            act_id = None
+
+        is_critical_proc = False
+        warning = None
+
+        if act_type == ActionType.KILL_PROCESS:
+            if ResponsePlaybooks.is_critical_system_process(act_target):
+                is_critical_proc = True
+                warning = (
+                    f"CẢNH BÁO NGUYÊM TRỌNG: Tiến trình '{act_target}' thuộc danh mục tiến trình hệ thống trọng yếu "
+                    f"(CRITICAL_SYSTEM_PROCESSES). Tiêu diệt tiến trình này có thể gây sập hệ điều hành (BSOD). "
+                    f"Hành động bị chặn khỏi cơ chế tự động phê duyệt (Auto-Approve). "
+                    f"Khuyến nghị chuyển sang cô lập máy trạm (ISOLATE_HOST) và bảo toàn chứng cứ số thay vì tiêu diệt."
+                )
+                if raise_on_critical:
+                    raise ValueError(warning)
+
+        is_safe = not is_critical_proc
+        high_risk_types = {
+            ActionType.ISOLATE_HOST,
+            ActionType.BLOCK_IP,
+            ActionType.RESET_PASSWORD,
+            ActionType.WAZUH_ACTIVE_RESPONSE,
+        }
+        can_auto = is_safe and (not req_approval) and (act_type not in high_risk_types)
+
+        return {
+            "is_safe": is_safe,
+            "is_critical_system_process": is_critical_proc,
+            "warning": warning,
+            "can_auto_approve": can_auto,
+            "recommendation": "ISOLATE_HOST" if is_critical_proc else None,
+            "action_id": act_id,
+            "action_type": act_type.value if hasattr(act_type, "value") else str(act_type),
+            "target": act_target,
+            "critical_system_processes": list(CRITICAL_SYSTEM_PROCESSES),
+        }
+
+    def can_auto_approve(
+        self,
+        action: Union[RecommendedAction, ActionType, str],
+        target: Optional[str] = None
+    ) -> bool:
+        """Kiểm tra xem một hành động phản ứng có thể được tự động phê duyệt (auto-approve) an toàn hay không.
+        
+        Quy tắc an toàn (Fail-Closed / Safety-by-Default):
+        - Tuyệt đối KHÔNG tự động duyệt nếu target thuộc CRITICAL_SYSTEM_PROCESSES khi KILL_PROCESS.
+        - Tuyệt đối KHÔNG tự động duyệt nếu hành động yêu cầu chuyên viên (require_human_approval=True).
+        - Tuyệt đối KHÔNG tự động duyệt các hành động diện rộng (ISOLATE_HOST, BLOCK_IP, RESET_PASSWORD).
+        """
+        safety = self.validate_action_safety(action, target=target, raise_on_critical=False)
+        return safety["can_auto_approve"]
 
     def submit_decision(self, state: IncidentState, decision: HITLDecision) -> IncidentState:
         """Áp dụng quyết định của chuyên viên lên một hành động phản ứng cụ thể trong state."""
-        # Đảm bảo các actions đều có action_id trước khi tìm kiếm
-        for idx, act in enumerate(state.recommended_actions):
-            if act.action_id is None:
-                act.action_id = f"ACT-{idx+1:03d}"
+        _ensure_action_ids(state)
+        target_action = _find_action(state, decision.action_id)
 
-        target_action: Optional[RecommendedAction] = None
-        for action in state.recommended_actions:
-            if action.action_id == decision.action_id:
-                target_action = action
-                break
-
-        if target_action is None:
-            raise ValueError(f"Không tìm thấy hành động với action_id='{decision.action_id}' trong IncidentState")
+        # Thẩm định an toàn hành động
+        safety = self.validate_action_safety(target_action)
+        if not safety["is_safe"]:
+            if target_action.parameters is None:
+                target_action.parameters = {}
+            target_action.parameters["safety_warning"] = safety["warning"]
+            target_action.parameters["is_critical_process"] = True
 
         # Áp dụng quyết định
         if decision.decision_type == DecisionType.APPROVE:
@@ -126,28 +244,33 @@ class HITLManager:
 
         # Ghi vết chuyển đổi trạng thái
         msg = f"Chuyên viên {decision.analyst_id} ra quyết định {decision.decision_type.value} cho action '{decision.action_id}'"
+        if not safety["is_safe"]:
+            msg += f" [CẢNH BÁO TIẾN TRÌNH HỆ THỐNG]"
         if decision.feedback_notes:
             msg += f": {decision.feedback_notes}"
+
+        metadata = {
+            "decision_id": decision.decision_id,
+            "action_id": decision.action_id,
+            "decision_type": decision.decision_type.value,
+            "analyst_id": decision.analyst_id,
+            "modified_parameters": decision.modified_parameters,
+            "feedback_notes": decision.feedback_notes,
+        }
+        if not safety["is_safe"]:
+            metadata["safety_warning"] = safety["warning"]
+            metadata["is_critical_process"] = True
 
         state.record_transition(
             node="hitl_manager",
             to_status=state.status,
             message=msg,
-            metadata={
-                "decision_id": decision.decision_id,
-                "action_id": decision.action_id,
-                "decision_type": decision.decision_type.value,
-                "analyst_id": decision.analyst_id,
-                "modified_parameters": decision.modified_parameters,
-                "feedback_notes": decision.feedback_notes,
-            }
+            metadata=metadata
         )
 
         # Cập nhật tổng thể analyst_approved nếu tất cả hành động đã được giải quyết
-        pending = self.get_pending_actions(state)
-        if len(pending) == 0:
-            approved_any = any(a.is_approved is True for a in state.recommended_actions)
-            state.analyst_approved = approved_any
+        if not self.get_pending_actions(state):
+            state.analyst_approved = any(a.is_approved is True for a in state.recommended_actions)
 
         return state
 
@@ -168,13 +291,27 @@ class HITLManager:
             )
             self.submit_decision(state, decision)
 
+        has_critical = any(
+            act.action_type == ActionType.KILL_PROCESS and not self.validate_action_safety(act)["is_safe"]
+            for act in pending
+        )
+
         state.analyst_approved = True
         state.analyst_feedback = notes or "Phê duyệt toàn bộ hành động ứng phó"
+        msg = f"Chuyên viên {analyst_id} phê duyệt toàn bộ {len(pending)} hành động"
+        if has_critical:
+            msg += " [CẢNH BÁO TIẾN TRÌNH HỆ THỐNG]"
+
+        transition_metadata = {"approved_all": True, "count": len(pending), "analyst_id": analyst_id}
+        if has_critical:
+            transition_metadata["has_critical_system_process"] = True
+            transition_metadata["critical_warning"] = "Cảnh báo: Bao gồm phê duyệt hành động trên tiến trình hệ thống trọng yếu"
+
         state.record_transition(
             node="hitl_manager",
             to_status=IncidentStatus.CONTAINED,
-            message=f"Chuyên viên {analyst_id} phê duyệt toàn bộ {len(pending)} hành động",
-            metadata={"approved_all": True, "count": len(pending), "analyst_id": analyst_id}
+            message=msg,
+            metadata=transition_metadata
         )
         return state
 
@@ -230,14 +367,7 @@ class HITLManager:
            - SERVICE_DISRUPTION: INVESTIGATING (để chuyên viên điều chỉnh chiến thuật).
            - RECOVERY_COMPLETE: RESOLVED (hoặc giữ nguyên nếu còn action khác).
         """
-        target_action: Optional[RecommendedAction] = None
-        for act in state.recommended_actions:
-            if act.action_id == action_id:
-                target_action = act
-                break
-
-        if target_action is None:
-            raise ValueError(f"Không tìm thấy hành động với action_id='{action_id}' trong IncidentState")
+        target_action = _find_action(state, action_id)
 
         if target_action.is_approved is not True:
             raise ValueError(
@@ -245,12 +375,7 @@ class HITLManager:
                 "Chỉ có thể hoàn tác các hành động đã được phê duyệt và thực thi."
             )
 
-        # Kiểm tra tính khả nghịch
-        if (
-            target_action.action_type == ActionType.KILL_PROCESS
-            or target_action.script_bundle is None
-            or target_action.script_bundle.rollback_script is None
-        ):
+        if not _is_reversible(target_action):
             raise ValueError(
                 f"Hành động '{action_id}' ({target_action.action_type.value}) không thể hoàn tác "
                 "(hành động không khả nghịch hoặc thiếu kịch bản rollback_script)."
@@ -261,32 +386,19 @@ class HITLManager:
         state.checkpoints[checkpoint_key] = state.model_dump(mode="json")
 
         # Đánh dấu hoàn tác trên action
-        target_action.is_approved = False
-        if target_action.parameters is None:
-            target_action.parameters = {}
-        target_action.parameters["rollback_executed"] = True
-        target_action.parameters["rollback_reason"] = reason.value
-        target_action.parameters["rollback_by"] = analyst_id
-        target_action.parameters["rollback_at"] = datetime.now(timezone.utc).isoformat()
+        _mark_action_rolled_back(target_action, reason.value, analyst_id)
 
         # Định tuyến trạng thái IncidentState theo RollbackReason
-        if reason == RollbackReason.FALSE_POSITIVE:
-            # Kiểm tra xem còn action nào đang được duyệt mà chưa hoàn tác không
-            remaining_active = [
-                a for a in state.recommended_actions
-                if a.is_approved is True and not (a.parameters and a.parameters.get("rollback_executed"))
-            ]
-            if len(remaining_active) == 0:
-                state.status = IncidentStatus.CLOSED_FALSE_POSITIVE
+        has_remaining_active = any(
+            a.is_approved is True and not (a.parameters and a.parameters.get("rollback_executed"))
+            for a in state.recommended_actions
+        )
+        if reason == RollbackReason.FALSE_POSITIVE and not has_remaining_active:
+            state.status = IncidentStatus.CLOSED_FALSE_POSITIVE
         elif reason == RollbackReason.SERVICE_DISRUPTION:
             state.status = IncidentStatus.INVESTIGATING
-        elif reason == RollbackReason.RECOVERY_COMPLETE:
-            remaining_active = [
-                a for a in state.recommended_actions
-                if a.is_approved is True and not (a.parameters and a.parameters.get("rollback_executed"))
-            ]
-            if len(remaining_active) == 0:
-                state.status = IncidentStatus.RESOLVED
+        elif reason == RollbackReason.RECOVERY_COMPLETE and not has_remaining_active:
+            state.status = IncidentStatus.RESOLVED
 
         # Ghi vết chuyển đổi trạng thái
         rollback_cmd = target_action.script_bundle.rollback_script
@@ -312,14 +424,7 @@ class HITLManager:
             }
         )
 
-        # Tự động đồng bộ và tái tạo lại Báo cáo điều tra nếu báo cáo đã được sinh trước đó
-        if state.final_report is not None:
-            try:
-                from src.agents.reporting_agent import ReportingAgent
-                state.final_report = ReportingAgent().generate_report(state)
-            except Exception:
-                pass
-
+        _refresh_report_if_needed(state)
         return state
 
     def rollback_all(
@@ -332,10 +437,7 @@ class HITLManager:
         """Hoàn tác toàn bộ các hành động phản ứng đã được phê duyệt và có khả năng rollback."""
         approved_actions = [
             act for act in state.recommended_actions
-            if act.is_approved is True
-            and act.action_type != ActionType.KILL_PROCESS
-            and act.script_bundle is not None
-            and act.script_bundle.rollback_script is not None
+            if act.is_approved is True and _is_reversible(act)
         ]
 
         if not approved_actions:
@@ -347,13 +449,7 @@ class HITLManager:
 
         rolled_back_ids: List[str] = []
         for act in approved_actions:
-            act.is_approved = False
-            if act.parameters is None:
-                act.parameters = {}
-            act.parameters["rollback_executed"] = True
-            act.parameters["rollback_reason"] = reason.value
-            act.parameters["rollback_by"] = analyst_id
-            act.parameters["rollback_at"] = datetime.now(timezone.utc).isoformat()
+            _mark_action_rolled_back(act, reason.value, analyst_id)
             rolled_back_ids.append(act.action_id)
 
         # Cập nhật trạng thái tổng thể
@@ -379,14 +475,7 @@ class HITLManager:
             }
         )
 
-        # Tự động đồng bộ và tái tạo lại Báo cáo điều tra nếu báo cáo đã được sinh trước đó
-        if state.final_report is not None:
-            try:
-                from src.agents.reporting_agent import ReportingAgent
-                state.final_report = ReportingAgent().generate_report(state)
-            except Exception:
-                pass
-
+        _refresh_report_if_needed(state)
         return state
 
 
@@ -404,8 +493,7 @@ class HITLSessionStore:
         if file_path is not None:
             path = Path(file_path)
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(state.model_dump_json(indent=2))
+            path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
             return str(path)
 
         return state.incident_id
@@ -420,21 +508,15 @@ class HITLSessionStore:
             path = Path(file_path)
             if not path.exists():
                 raise FileNotFoundError(f"Tệp phiên làm việc không tồn tại: {file_path}")
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-            state = IncidentState.model_validate_json(content)
+            state = IncidentState.model_validate_json(path.read_text(encoding="utf-8"))
             self._sessions[state.incident_id] = state
             return state
 
-        if incident_id is not None and incident_id in self._sessions:
-            return self._sessions[incident_id]
-
-        return None
+        return self._sessions.get(incident_id) if incident_id is not None else None
 
     def list_pending_sessions(self) -> List[str]:
         """Liệt kê danh sách các incident_id của những phiên đang có hành động chờ phê duyệt."""
-        pending_ids: List[str] = []
-        for inc_id, state in self._sessions.items():
-            if not self.hitl_manager.is_approval_complete(state):
-                pending_ids.append(inc_id)
-        return pending_ids
+        return [
+            inc_id for inc_id, state in self._sessions.items()
+            if not self.hitl_manager.is_approval_complete(state)
+        ]

@@ -9,7 +9,7 @@
 > - **Phan Trường Đô** – MSSV: 23162020  
 > **Giảng viên hướng dẫn:** ThS. Đinh Công Đoan  
 > **Thời gian thực hiện:** 20/09/2026 – 14/12/2026  
-> **Trạng thái:** ✅ **Hoàn thiện 100% – Sẵn sàng Báo cáo & Nghiệm thu** (198/198 Test Cases PASS)
+> **Trạng thái:** ✅ **Hoàn thiện 100% – Sẵn sàng Báo cáo & Nghiệm thu** (215/215 Test Cases PASS)
 
 ---
 
@@ -110,8 +110,8 @@ TLCN/
 ├── data/                           # Dữ liệu thực nghiệm & CSDL Vector
 │   ├── chromadb/                   # Vector DB lưu trữ ma trận MITRE ATT&CK & Wazuh Ruleset
 │   ├── incidents/                  # Kho lưu trữ trạng thái các sự cố đã điều tra (JSON)
-│   ├── raw/                        # Bộ dataset nguyên gốc OTRF Mordor (Sysmon JSON Lines)
-│   └── wazuh_alerts/               # Bộ cảnh báo mẫu 4 kịch bản phục vụ demo
+│   └── raw/                        # Bộ dataset thực nghiệm (Mordor, Wazuh Alerts, LogHub, CICIDS)
+│       └── wazuh/                  # Bộ cảnh báo mẫu 4 kịch bản phục vụ demo
 ├── run_live_soc.py                 # File thực thi khởi chạy đồng thời Webhook & Dashboard
 ├── requirements.txt                # Danh mục thư viện Python phụ thuộc
 └── README.md                       # Tài liệu tổng quan dự án
@@ -185,13 +185,19 @@ TLCN/tests/test_threat_intel_agent.py ..........                         [ 81%]
 TLCN/tests/test_tools.py ....                                            [ 83%]
 TLCN/tests/test_ui.py ...................                                [ 93%]
 TLCN/tests/test_wazuh.py ....                                            [ 95%]
-TLCN/tests/test_webhook_receiver.py .........                            [100%]
+TLCN/tests/test_generic_log_and_llm_triage.py ...........          [ 88%]
+TLCN/tests/test_security_and_resilience.py ......                       [ 91%]
+TLCN/tests/test_threat_intel_agent.py ..........                        [ 95%]
+TLCN/tests/test_tools.py ....                                           [ 97%]
+TLCN/tests/test_ui.py ...................                               [ 99%]
+TLCN/tests/test_wazuh.py ....                                           [ 99%]
+TLCN/tests/test_webhook_receiver.py .........                           [100%]
 
-============================= 198 passed in 12.65s =============================
+============================= 215 passed in 1.25s =============================
 ```
-- **Tổng số tests:** 198 test cases.
+- **Tổng số tests:** 215 test cases (bổ sung toàn diện kiểm thử đa định dạng log và Triage LLM động).
 - **Tỷ lệ thành công:** **100% PASS (0 Failures, 0 Errors)**.
-- Chi tiết từng mã test case (từ `TC-001` đến `TC-198`) được tự động hóa hoàn toàn trong thư mục `tests/`.
+- Chi tiết từng mã test case (từ `TC-001` đến `TC-215`) được tự động hóa hoàn toàn trong thư mục `tests/`.
 
 ---
 

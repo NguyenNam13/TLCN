@@ -17,7 +17,6 @@ Sử dụng:
 import os
 import sys
 import time
-import signal
 import argparse
 import subprocess
 

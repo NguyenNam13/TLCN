@@ -60,6 +60,7 @@ class AdvancedPowerShellDeobfuscator:
         """
         Khử ký tự backtick (`) và caret (^) chèn vào giữa các từ khóa PowerShell.
         Ví dụ: p`o`w`e`r`s`h`e`l`l -> powershell, I`E`X -> IEX, d`o`w`n`l`o`a`d -> download.
+               c^m^d -> cmd, w^h^o^a^m^i -> whoami.
         """
         if not text:
             return text, False
@@ -67,23 +68,16 @@ class AdvancedPowerShellDeobfuscator:
         modified = False
         result = text
 
-        # 1. Backtick trước chữ cái, số, gạch nối, dollar
-        pattern_letter = r"`([a-zA-Z0-9_\-\$])"
-        if re.search(pattern_letter, result):
-            result = re.sub(pattern_letter, r"\1", result)
-            modified = True
-
-        # 2. Backtick trước dấu nháy kép hoặc đơn không chuẩn
-        pattern_quotes = r"`(['\"])"
-        if re.search(pattern_quotes, result):
-            result = re.sub(pattern_quotes, r"\1", result)
-            modified = True
-
-        # 3. Caret (^) nếu gọi qua cmd.exe wrapper
-        pattern_caret = r"\^([a-zA-Z0-9_\-\$])"
-        if re.search(pattern_caret, result):
-            result = re.sub(pattern_caret, r"\1", result)
-            modified = True
+        for _ in range(5):
+            # 1. Backtick trước chữ cái, số, gạch nối, gạch dưới, dollar, chấm, hai chấm, slash
+            new_res = re.sub(r"[`\^]([a-zA-Z0-9_\-\$\.\:/\\])", r"\1", result)
+            # 2. Backtick trước dấu nháy kép hoặc đơn
+            new_res = re.sub(r"[`\^](['\"])", r"\1", new_res)
+            if new_res != result:
+                result = new_res
+                modified = True
+            else:
+                break
 
         return result, modified
 
@@ -158,42 +152,154 @@ class AdvancedPowerShellDeobfuscator:
         new_text = re.sub(format_pattern, replace_format, current, flags=re.IGNORECASE)
         return new_text, modified
 
+    COMMON_ENV_VARS = {
+        "comspec": "cmd.exe",
+        "public": r"C:\Users\Public",
+        "systemroot": r"C:\Windows",
+        "windir": r"C:\Windows",
+        "systemdrive": "C:",
+        "homedrive": "C:",
+        "programdata": r"C:\ProgramData",
+        "allusersprofile": r"C:\ProgramData",
+        "temp": r"C:\Users\Public\Temp",
+        "tmp": r"C:\Users\Public\Temp",
+    }
+
     @classmethod
-    def decompress_stream(cls, raw_bytes: bytes) -> Optional[bytes]:
+    def normalize_env_vars(cls, text: str) -> Tuple[str, bool]:
+        """
+        Chuẩn hóa các biến môi trường động phổ biến như $env:ComSpec, $env:Public, %COMSPEC%.
+        """
+        if not text:
+            return text, False
+
+        modified = False
+        result = text
+
+        def replace_ps_env(m: re.Match) -> str:
+            nonlocal modified
+            var_name = m.group(1).lower()
+            if var_name in cls.COMMON_ENV_VARS:
+                modified = True
+                return cls.COMMON_ENV_VARS[var_name]
+            return m.group(0)
+
+        result = re.sub(r"\$\{?env:([a-zA-Z0-9_]+)\}?", replace_ps_env, result, flags=re.IGNORECASE)
+
+        def replace_cmd_env(m: re.Match) -> str:
+            nonlocal modified
+            var_name = m.group(1).lower()
+            if var_name in cls.COMMON_ENV_VARS:
+                modified = True
+                return cls.COMMON_ENV_VARS[var_name]
+            return m.group(0)
+
+        result = re.sub(r"%([a-zA-Z0-9_]+)%", replace_cmd_env, result, flags=re.IGNORECASE)
+
+        return result, modified
+
+    @classmethod
+    def resolve_char_casting(cls, text: str) -> Tuple[str, bool]:
+        """
+        Xử lý mã ký tự số học và mảng ký tự:
+        [char]0x41 -> 'A'
+        [char](65) -> 'A'
+        [char]97 -> 'a'
+        [char[]](65, 66, 67) -join '' -> 'ABC'
+        """
+        if not text or "char" not in text.lower():
+            return text, False
+
+        modified = False
+        current = text
+
+        # 1. Mảng ký tự: [char[]](65, 66, 67) -join '' hoặc [char[]](0x41, 0x42)
+        array_pattern = r"\[(?:System\.)?char\[\]\]\s*\(\s*([0-9xX,\s\+\-]+)\s*\)(?:\s*-join\s*['\"]['\"])?"
+        def replace_char_array(m: re.Match) -> str:
+            nonlocal modified
+            raw_nums = m.group(1)
+            try:
+                chars = []
+                for item in raw_nums.split(","):
+                    item = item.strip()
+                    if not item:
+                        continue
+                    if re.match(r"^(?:0x[0-9a-fA-F]+|\d+)(?:\s*[\+\-]\s*(?:0x[0-9a-fA-F]+|\d+))*$", item):
+                        val = eval(item, {"__builtins__": None}, {})
+                        if 0 <= val <= 0x10ffff:
+                            chars.append(chr(val))
+                if chars:
+                    modified = True
+                    joined = "".join(chars).replace("'", "''")
+                    return f"'{joined}'"
+            except Exception:
+                pass
+            return m.group(0)
+
+        current = re.sub(array_pattern, replace_char_array, current, flags=re.IGNORECASE)
+
+        # 2. Đơn ký tự: [char]0x41, [char](65), [char]97, [char](0x40 + 1)
+        single_pattern = r"\[(?:System\.)?char\]\s*(?:\(\s*([0-9xX\s\+\-]+)\s*\)|(0x[0-9a-fA-F]+|\d+))"
+        def replace_single_char(m: re.Match) -> str:
+            nonlocal modified
+            expr = m.group(1) or m.group(2)
+            try:
+                expr = expr.strip()
+                if re.match(r"^(?:0x[0-9a-fA-F]+|\d+)(?:\s*[\+\-]\s*(?:0x[0-9a-fA-F]+|\d+))*$", expr):
+                    val = eval(expr, {"__builtins__": None}, {})
+                    if 0 <= val <= 0x10ffff:
+                        modified = True
+                        ch = chr(val).replace("'", "''")
+                        return f"'{ch}'"
+            except Exception:
+                pass
+            return m.group(0)
+
+        current = re.sub(single_pattern, replace_single_char, current, flags=re.IGNORECASE)
+
+        return current, modified
+
+    @classmethod
+    def resolve_parentheses_unwrapping(cls, text: str) -> Tuple[str, bool]:
+        """
+        Mở ngoặc đơn bọc ngoài chuỗi đơn lẻ sau khi nối hoặc khử rối:
+        ("exe") -> "exe"
+        ('downloadstring') -> 'downloadstring'
+        Không mở ngoặc đối với lời gọi hàm/phương thức: func('arg') hoặc .method('arg').
+        """
+        if not text:
+            return text, False
+
+        # Chỉ mở ngoặc khi trước dấu '(' KHÔNG phải là tên hàm, phương thức hoặc biến ([a-zA-Z0-9_\.\$])
+        pattern = r"(?<![a-zA-Z0-9_\.\$])\(\s*(['\"][^'\"\n\r]+?['\"])\s*\)"
+        if re.search(pattern, text):
+            result = re.sub(pattern, r"\1", text)
+            return result, True
+        return text, False
+
+    MAX_DECOMPRESSED_BYTES = 5 * 1024 * 1024  # 5MB giới hạn an toàn chống Gzip Bomb DoS
+
+    @classmethod
+    def decompress_stream(cls, raw_bytes: bytes, max_size: int = MAX_DECOMPRESSED_BYTES) -> Optional[bytes]:
         """
         Nhận diện và giải nén dữ liệu nén Gzip hoặc Deflate Stream.
         Hỗ trợ:
         - Gzip magic header (0x1f 0x8b)
         - Zlib / Deflate Stream
         - Raw Deflate (không có zlib header - zlib.MAX_WBITS)
+        Tích hợp ngưỡng giới hạn dung lượng để bảo vệ chống cạn kiệt RAM (Decompression Bomb DoS).
         """
         if not raw_bytes or len(raw_bytes) < 4:
             return None
 
-        # 1. Gzip Header Magic Bytes: 1F 8B
-        if raw_bytes[:2] == b"\x1f\x8b":
+        for wbits in (16 + zlib.MAX_WBITS, zlib.MAX_WBITS, -zlib.MAX_WBITS):
             try:
-                return gzip.decompress(raw_bytes)
+                decomp = zlib.decompress(raw_bytes, wbits)
+                if len(decomp) <= max_size:
+                    return decomp
+                return None
             except Exception:
                 pass
-
-        # 2. Zlib Decompression
-        try:
-            return zlib.decompress(raw_bytes)
-        except Exception:
-            pass
-
-        # 3. Raw Deflate (.NET DeflateStream standard: -MAX_WBITS)
-        try:
-            return zlib.decompress(raw_bytes, -zlib.MAX_WBITS)
-        except Exception:
-            pass
-
-        # 4. Zlib with Gzip wrapper (16 + MAX_WBITS)
-        try:
-            return zlib.decompress(raw_bytes, 16 + zlib.MAX_WBITS)
-        except Exception:
-            pass
 
         return None
 
@@ -413,6 +519,20 @@ class AdvancedPowerShellDeobfuscator:
                 current_text = text_no_ticks
                 overall_obfuscated = True
 
+            # --- Bước 1b: Chuẩn hóa biến môi trường động ---
+            text_no_env, modified_env = cls.normalize_env_vars(current_text)
+            if modified_env:
+                layer_actions.append("normalize_env_vars")
+                current_text = text_no_env
+                overall_obfuscated = True
+
+            # --- Bước 1c: Giải mã ký tự số học và mảng [char] ---
+            text_no_char, modified_char = cls.resolve_char_casting(current_text)
+            if modified_char:
+                layer_actions.append("resolve_char_casting")
+                current_text = text_no_char
+                overall_obfuscated = True
+
             # --- Bước 2: Giải toán tử định dạng (-f) ---
             text_no_fmt, modified_fmt = cls.resolve_format_operator(current_text)
             if modified_fmt:
@@ -425,6 +545,13 @@ class AdvancedPowerShellDeobfuscator:
             if modified_concat:
                 layer_actions.append("resolve_string_concatenation")
                 current_text = text_no_concat
+                overall_obfuscated = True
+
+            # --- Bước 3b: Mở ngoặc đơn bọc chuỗi đơn lẻ ('...') / ("...") ---
+            text_unwrapped, modified_unwrapped = cls.resolve_parentheses_unwrapping(current_text)
+            if modified_unwrapped:
+                layer_actions.append("resolve_parentheses_unwrapping")
+                current_text = text_unwrapped
                 overall_obfuscated = True
 
             # --- Bước 4: Phát hiện và giải mã Base64 / GzipStream ---

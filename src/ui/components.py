@@ -13,19 +13,16 @@ Cung cấp:
 - render_hitl_action_cards & apply_hitl_action_decision: Bảng điều khiển can thiệp chuyên viên HITL.
 """
 
-from typing import List, Dict, Any, Optional
+import os
 import html
+from typing import List, Dict, Any, Optional
 import streamlit as st
 
 from src.core.schemas import (
     IncidentStatus,
-    SeverityLevel,
     ActionType,
     ThreatIntelEnrichment,
     RootCauseAnalysis,
-    RecommendedAction,
-    IoCItem,
-    ProcessNode,
 )
 from src.core.state import IncidentState
 from src.core.hitl_manager import HITLManager, RollbackReason
@@ -438,22 +435,23 @@ def generate_mermaid_graph(state: Optional[IncidentState]) -> str:
         '    Enrichment["3. Threat Intel CTI"]',
         '    RCA["4. Root Cause Analysis"]',
         '    Response["5. Response Agent"]',
-        '    HITL["6. HITL Approval"]',
-        '    Reporting["7. Reporting Agent"]',
-        '    ClosedFP["Đóng: False Positive"]',
-        '    End["Hoàn tất Sự cố: RESOLVED"]',
+        '    HITL{{"🛑 Cổng Phê duyệt HITL"}}',
+        '    Reporting["6. Reporting Agent"]',
+        '    ClosedFP["📁 Đóng: False Positive"]',
+        '    End["🏁 Hoàn tất Sự cố: RESOLVED"]',
         "",
         "    Start --> Ingestion",
         "    Ingestion --> Triage",
-        "    Triage -->|True Positive| Enrichment",
-        "    Triage -->|True Positive| RCA",
+        "    Triage -->|⚡ True Positive (Song song)| Enrichment",
+        "    Triage -->|⚡ True Positive (Song song)| RCA",
         "    Triage -.->|False Positive| ClosedFP",
+        "    Enrichment -.->|CTI Context Feed| RCA",
         "    Enrichment --> Response",
         "    RCA --> Response",
         "    Response --> HITL",
-        "    HITL -->|Duyệt / Điều chỉnh| Reporting",
+        "    HITL -->|Duyệt ✓| Reporting",
+        "    HITL -.->|Từ chối / Hiệu chỉnh ↺| Response",
         "    Reporting --> End",
-        "    ClosedFP -.-> End",
         "",
         "    classDef completed fill:#064e3b,stroke:#10b981,color:#ecfdf5,stroke-width:2px;",
         "    classDef active fill:#78350f,stroke:#fbbf24,color:#fffbeb,stroke-width:2.5px;",
@@ -880,7 +878,103 @@ def render_process_tree(rca: Optional[RootCauseAnalysis]):
 
 
 # =====================================================================
-# 6. HITL ACTION CARDS COMPONENT
+# 6. SIMPLE RBAC CONSTANTS & PROCESS WHITELIST GUARD HELPERS
+# =====================================================================
+ROLE_SOC_ANALYST = "SOC Analyst (Tier 1/2)"
+ROLE_SOC_MANAGER = "SOC Manager (Incident Commander)"
+USER_ROLES = [ROLE_SOC_ANALYST, ROLE_SOC_MANAGER]
+
+DANGEROUS_ACTIONS = {
+    ActionType.ISOLATE_HOST,
+    ActionType.KILL_PROCESS,
+    "ISOLATE_HOST",
+    "KILL_PROCESS",
+}
+
+SYSTEM_CRITICAL_PROCESSES = {
+    "svchost.exe",
+    "lsass.exe",
+    "explorer.exe",
+    "csrss.exe",
+    "smss.exe",
+    "services.exe",
+    "wininit.exe",
+    "winlogon.exe",
+    "spoolsv.exe",
+    "system",
+}
+
+
+def is_dangerous_action(action: Any) -> bool:
+    """
+    Xác định hành động có thuộc danh mục rủi ro cao (nguy hiểm) hay không.
+    Hành động nguy hiểm gồm: ISOLATE_HOST (cô lập máy chủ) và KILL_PROCESS (diệt tiến trình).
+    """
+    if action is None:
+        return False
+    act_type = getattr(action, "action_type", action)
+    val = act_type.value if hasattr(act_type, "value") else str(act_type or "")
+    return str(val).upper() in {"ISOLATE_HOST", "KILL_PROCESS"}
+
+
+def is_critical_system_process(target: Optional[str]) -> bool:
+    """
+    Kiểm tra mục tiêu có phải là tiến trình hệ thống quan trọng cần bảo vệ (Process Whitelist Guard).
+    Bao gồm svchost.exe, lsass.exe, explorer.exe, csrss.exe, services.exe,...
+    """
+    if not target:
+        return False
+    target_clean = str(target).lower().strip()
+    norm_name = os.path.basename(target_clean.replace("\\", "/"))
+    if norm_name in SYSTEM_CRITICAL_PROCESSES:
+        return True
+    for proc in SYSTEM_CRITICAL_PROCESSES:
+        if proc in target_clean:
+            return True
+    return False
+
+
+def can_user_approve_action(user_role: Optional[str], action: Any) -> bool:
+    """
+    Kiểm tra quyền phê duyệt hành động theo cơ chế Simple RBAC:
+    - SOC Manager (Incident Commander): Toàn quyền phê duyệt mọi hành động.
+    - SOC Analyst (Tier 1/2): Chỉ được phê duyệt hành động rủi ro thấp/trung bình (BLOCK_IP, PATCH_SYSTEM,...).
+      Bị khóa phê duyệt đối với các hành động rủi ro cao (ISOLATE_HOST, KILL_PROCESS).
+    """
+    if not user_role:
+        return True
+    role_str = str(user_role).strip().lower()
+    if "manager" in role_str or "commander" in role_str:
+        return True
+    if is_dangerous_action(action):
+        return False
+    return True
+
+
+def get_action_rbac_warning(user_role: Optional[str], action: Any) -> Optional[str]:
+    """
+    Trả về cảnh báo nghiệp vụ nếu vai trò người dùng không đủ quyền phê duyệt hành động nguy hiểm.
+    """
+    if not can_user_approve_action(user_role, action):
+        return "⚠️ Yêu cầu vai trò SOC Manager để phê duyệt hành động có rủi ro cao (Cô lập máy / Diệt tiến trình)"
+    return None
+
+
+def get_whitelist_guard_warning(target: Optional[str]) -> Optional[str]:
+    """
+    Trả về cảnh báo trực quan Process Whitelist Guard nếu mục tiêu là tiến trình hệ thống quan trọng.
+    """
+    if is_critical_system_process(target):
+        return (
+            f"🛡️ Process Whitelist Guard: Cảnh báo: Mục tiêu '{target}' là tiến trình hệ thống quan trọng "
+            "(như svchost.exe, lsass.exe, explorer.exe). "
+            "Can thiệp hoặc diệt tiến trình này có thể gây mất ổn định hoặc sập hệ điều hành (BSOD / System Crash)!"
+        )
+    return None
+
+
+# =====================================================================
+# 7. HITL ACTION CARDS COMPONENT
 # =====================================================================
 def apply_hitl_action_decision(
     state: IncidentState,
@@ -889,9 +983,11 @@ def apply_hitl_action_decision(
     edited_target: Optional[str] = None,
     edited_priority: Optional[int] = None,
     edited_description: Optional[str] = None,
+    user_role: Optional[str] = None,
 ) -> IncidentState:
     """
     Xử lý cập nhật quyết định của chuyên viên SOC cho từng hành động hoặc chỉnh sửa tham số.
+    Tích hợp Simple RBAC: kiểm tra vai trò người dùng trước khi phê duyệt hành động nguy hiểm.
 
     :param state: IncidentState.
     :param action_idx: Chỉ số hành động trong state.recommended_actions.
@@ -899,6 +995,7 @@ def apply_hitl_action_decision(
     :param edited_target: Tham số mục tiêu mới (nếu có).
     :param edited_priority: Độ ưu tiên mới (nếu có).
     :param edited_description: Mô tả mới (nếu có).
+    :param user_role: Vai trò người dùng ("SOC Analyst (Tier 1/2)" hoặc "SOC Manager (Incident Commander)").
     :return: IncidentState đã cập nhật.
     """
     if not state.recommended_actions or action_idx < 0 or action_idx >= len(state.recommended_actions):
@@ -915,7 +1012,11 @@ def apply_hitl_action_decision(
 
     decision_norm = decision.upper()
     if decision_norm == "APPROVE":
-        action.is_approved = True
+        if user_role is not None and not can_user_approve_action(user_role, action):
+            # Không đủ thẩm quyền phê duyệt hành động rủi ro cao
+            action.is_approved = None
+        else:
+            action.is_approved = True
     elif decision_norm == "REJECT":
         action.is_approved = False
     elif decision_norm == "RESET":
@@ -924,10 +1025,15 @@ def apply_hitl_action_decision(
     return state
 
 
-def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
+def render_hitl_action_cards(
+    state: Optional[IncidentState],
+    manager=None,
+    user_role: Optional[str] = None,
+):
     """
     Hiển thị từng hành động phản ứng (Wazuh Active Response, Isolate Host, Block IP, Kill Process),
     form chỉnh sửa tham số, nút Duyệt / Từ chối / Chỉnh sửa trực tiếp trên giao diện web.
+    Tích hợp Simple RBAC (SOC Analyst vs SOC Manager) và cảnh báo trực quan Process Whitelist Guard.
     """
     st.subheader("🛡️ Trung tâm Phê duyệt Chuyên viên (Interactive HITL Console)")
 
@@ -935,11 +1041,46 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
         st.info("Chưa có hành động phản ứng nào được đề xuất (Response Agent chưa chạy).")
         return
 
+    # Lấy vai trò người dùng từ session state nếu không truyền trực tiếp
+    if user_role is None:
+        try:
+            user_role = st.session_state.get("user_role", ROLE_SOC_ANALYST)
+        except Exception:
+            user_role = ROLE_SOC_ANALYST
+
+    is_manager = "manager" in user_role.lower() or "commander" in user_role.lower()
+    role_border = "#38bdf8" if is_manager else "#f59e0b"
+    role_color = "#38bdf8" if is_manager else "#fbbf24"
+    role_desc = (
+        "🔑 Toàn quyền Incident Commander: Được duyệt ISOLATE_HOST & KILL_PROCESS"
+        if is_manager
+        else "🔒 Phân tích viên Tier 1/2: Bị giới hạn các hành động rủi ro cao (Cần Manager duyệt)"
+    )
+
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 1px solid {role_border}; border-left: 5px solid {role_border}; border-radius: 8px; padding: 10px 16px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.2rem;">👤</span>
+                <div>
+                    <span style="color: #94a3b8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Phiên Làm Việc Hiện Tại:</span>
+                    <div style="color: {role_color}; font-weight: 800; font-size: 0.95rem;">{html.escape(user_role)}</div>
+                </div>
+            </div>
+            <div style="text-align: right; color: #cbd5e1; font-size: 0.78rem;">
+                {html.escape(role_desc)}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.markdown(
         """
-        > 💡 **Quy trình HITL (NIST SP 800-61 Rev.2):**
+        > 💡 **Quy trình HITL & Phân quyền RBAC (NIST SP 800-61 Rev.2):**
         > Chuyên viên phân tích SOC có quyền kiểm soát toàn diện: Duyệt các biện pháp khẩn cấp,
         > từ chối hành động gây gián đoạn dịch vụ, hoặc tùy biến địa chỉ IP/PID trước khi kích hoạt phản ứng tự động.
+        > Các hành động rủi ro cao (Cô lập máy / Diệt tiến trình) bắt buộc vai trò **SOC Manager (Incident Commander)** phê duyệt.
         """
     )
 
@@ -950,14 +1091,22 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
 
     hitl_mgr = manager or HITLManager()
 
+    has_dangerous = any(is_dangerous_action(a) for a in state.recommended_actions)
+    can_approve_all = is_manager or not has_dangerous
+
     # Nút Duyệt tất cả / Từ chối tất cả / Hoàn tác tất cả nhanh
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1.5])
     with col_btn1:
-        if st.button("✅ Phê duyệt Tất cả", use_container_width=True):
+        tooltip_all = (
+            "Phê duyệt tất cả các hành động phản ứng"
+            if can_approve_all
+            else "⚠️ Yêu cầu vai trò SOC Manager để duyệt tất cả do danh sách có hành động rủi ro cao (Cô lập máy / Diệt tiến trình)"
+        )
+        if st.button("✅ Phê duyệt Tất cả", use_container_width=True, disabled=not can_approve_all, help=tooltip_all):
             for act in state.recommended_actions:
                 act.is_approved = True
             state.analyst_approved = True
-            state.analyst_feedback = "Phê duyệt đồng loạt tất cả các hành động bởi Chuyên viên SOC"
+            state.analyst_feedback = f"Phê duyệt đồng loạt tất cả các hành động bởi {user_role}"
             st.success("Đã phê duyệt tất cả các hành động phản ứng!")
             st.rerun()
 
@@ -966,7 +1115,7 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
             for act in state.recommended_actions:
                 act.is_approved = False
             state.analyst_approved = False
-            state.analyst_feedback = "Từ chối toàn bộ kế hoạch hành động bởi Chuyên viên SOC"
+            state.analyst_feedback = f"Từ chối toàn bộ kế hoạch hành động bởi {user_role}"
             st.warning("Đã từ chối tất cả các hành động phản ứng!")
             st.rerun()
 
@@ -1004,6 +1153,9 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
                     except Exception as e:
                         st.error(f"Lỗi hoàn tác: {e}")
 
+    if not can_approve_all:
+        st.caption("🔒 *Nút 'Phê duyệt Tất cả' bị khóa do danh sách có hành động rủi ro cao cần quyền SOC Manager.*")
+
     st.divider()
 
     action_type_icons = {
@@ -1023,22 +1175,31 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
 
         if is_rolled_back:
             status_badge = "🔄 ĐÃ HOÀN TÁC (ROLLED BACK)"
-            card_border = "#6f42c1"
         elif act.is_approved is True:
             status_badge = "🟢 ĐÃ PHÊ DUYỆT (APPROVED)"
-            card_border = "#28a745"
         elif act.is_approved is False:
             status_badge = "🔴 ĐÃ TỪ CHỐI (REJECTED)"
-            card_border = "#dc3545"
         else:
             status_badge = "🟡 CHỜ DUYỆT (PENDING)"
-            card_border = "#ffc107"
 
         with st.expander(
             f"{icon} Hành động #{idx+1}: {act_name} | Target: {act.target} - [{status_badge}]",
             expanded=(act.is_approved is None)
         ):
             st.markdown(f"**Mã hành động (ID):** `{act.action_id}` | **Mô tả:** {act.description}")
+
+            # 1. CẢNH BÁO TRỰC QUAN PROCESS WHITELIST GUARD
+            if is_critical_system_process(act.target):
+                st.warning(
+                    f"🛡️ **Process Whitelist Guard:** Cảnh báo: Mục tiêu `{act.target}` là tiến trình hệ thống quan trọng "
+                    "(như svchost.exe, lsass.exe, explorer.exe). "
+                    "Can thiệp hoặc diệt tiến trình này có thể gây mất ổn định hoặc sập hệ điều hành (BSOD / System Crash)!"
+                )
+
+            # 2. CẢNH BÁO PHÂN QUYỀN SIMPLE RBAC
+            can_approve = can_user_approve_action(user_role, act)
+            if not can_approve:
+                st.warning("⚠️ Yêu cầu vai trò SOC Manager để phê duyệt hành động có rủi ro cao (Cô lập máy / Diệt tiến trình)")
 
             if is_rolled_back:
                 rb_reason = act.parameters.get("rollback_reason", "Chưa rõ")
@@ -1068,9 +1229,27 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
                 key=f"hitl_desc_{idx}",
             )
 
+            # Kiểm tra nếu người dùng chỉnh sửa mục tiêu thành tiến trình whitelist
+            if new_target != act.target and is_critical_system_process(new_target):
+                st.warning(
+                    f"🛡️ **Process Whitelist Guard:** Cảnh báo: Mục tiêu mới `{new_target}` là tiến trình hệ thống quan trọng!"
+                )
+
             col_a, col_b, col_c = st.columns([1, 1, 1])
             with col_a:
-                if st.button(f"✅ Duyệt #{idx+1}", key=f"btn_approve_{idx}", use_container_width=True):
+                btn_disabled = not can_approve
+                btn_tooltip = (
+                    "⚠️ Yêu cầu vai trò SOC Manager để phê duyệt hành động có rủi ro cao (Cô lập máy / Diệt tiến trình)"
+                    if btn_disabled
+                    else f"Phê duyệt hành động #{idx+1}"
+                )
+                if st.button(
+                    f"✅ Duyệt #{idx+1}",
+                    key=f"btn_approve_{idx}",
+                    use_container_width=True,
+                    disabled=btn_disabled,
+                    help=btn_tooltip,
+                ):
                     apply_hitl_action_decision(
                         state=state,
                         action_idx=idx,
@@ -1078,6 +1257,7 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
                         edited_target=new_target,
                         edited_priority=int(new_prio),
                         edited_description=new_desc,
+                        user_role=user_role,
                     )
                     st.success(f"Đã duyệt hành động #{idx+1}")
                     st.rerun()
@@ -1091,6 +1271,7 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
                         edited_target=new_target,
                         edited_priority=int(new_prio),
                         edited_description=new_desc,
+                        user_role=user_role,
                     )
                     st.warning(f"Đã từ chối hành động #{idx+1}")
                     st.rerun()
@@ -1104,6 +1285,7 @@ def render_hitl_action_cards(state: Optional[IncidentState], manager=None):
                         edited_target=new_target,
                         edited_priority=int(new_prio),
                         edited_description=new_desc,
+                        user_role=user_role,
                     )
                     st.info(f"Đã lưu tham số điều chỉnh cho hành động #{idx+1}")
                     st.rerun()

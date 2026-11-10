@@ -101,9 +101,7 @@ class IncidentState(BaseModel):
     @property
     def severity(self) -> Optional[SeverityLevel]:
         """Thuộc tính tiện ích trích xuất mức độ nghiêm trọng từ triage_result nếu có."""
-        if self.triage_result and hasattr(self.triage_result, "severity"):
-            return self.triage_result.severity
-        return None
+        return self.triage_result.severity if self.triage_result else None
 
 
 class IncidentStateDict(TypedDict, total=False):

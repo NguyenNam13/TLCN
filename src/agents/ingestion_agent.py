@@ -11,8 +11,10 @@ Nhiệm vụ:
 """
 
 import re
+import json
 import uuid
 import base64
+import logging
 import ipaddress
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Union
@@ -25,9 +27,12 @@ from src.core.schemas import (
 )
 from src.core.state import IncidentState
 from src.agents.prompts import INGESTION_AGENT_SYSTEM_PROMPT
+from src.tools.parsers import LogParserTool
 from src.tools.wazuh_client import WazuhClientTool
 from src.tools.wazuh_stream import WazuhAlertStreamer
-from src.tools.deobfuscator import AdvancedPowerShellDeobfuscator, DeobfuscationResult
+from src.tools.deobfuscator import AdvancedPowerShellDeobfuscator
+
+logger = logging.getLogger("DataIngestionAgent")
 
 
 class IngestionAgent:
@@ -117,8 +122,11 @@ class IngestionAgent:
                     item["is_public"] = is_public
                 iocs.append(item)
 
-        # 1. Trích xuất IP từ source_ip và dest_ip
-        for ip_candidate in (event.source_ip, event.dest_ip):
+        # 1. Trích xuất IP từ source_ip, dest_ip và quét IP từ dòng lệnh / câu lệnh giải mã
+        text_corpus = f"{event.command_line or ''} {decoded_cmd or ''}"
+        ip_regex = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+        ip_candidates = [event.source_ip, event.dest_ip] + re.findall(ip_regex, text_corpus)
+        for ip_candidate in ip_candidates:
             if ip_candidate:
                 try:
                     ip_obj = ipaddress.ip_address(ip_candidate)
@@ -126,17 +134,6 @@ class IngestionAgent:
                     add_ioc("IP", ip_candidate, is_public=is_public)
                 except ValueError:
                     pass
-
-        # 2. Quét IP từ dòng lệnh và câu lệnh giải mã
-        text_corpus = f"{event.command_line or ''} {decoded_cmd or ''}"
-        ip_regex = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-        for ip_match in re.findall(ip_regex, text_corpus):
-            try:
-                ip_obj = ipaddress.ip_address(ip_match)
-                is_public = not (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved)
-                add_ioc("IP", ip_match, is_public=is_public)
-            except ValueError:
-                pass
 
         # 3. Trích xuất URL
         url_regex = r"https?://[a-zA-Z0-9_\-\.\:]+(?:/[^\s'\"]*)?"
@@ -166,6 +163,27 @@ class IngestionAgent:
 
         return iocs
 
+    def _enrich_event_command_and_iocs(self, event: ParsedEvent) -> ParsedEvent:
+        """
+        Khử làm rối câu lệnh qua AdvancedPowerShellDeobfuscator và trích xuất sơ bộ IoCs.
+        """
+        deob_res = AdvancedPowerShellDeobfuscator.deobfuscate(event.command_line)
+        decoded_cmd = None
+        if deob_res.has_obfuscation and deob_res.deobfuscated_command.strip() != (event.command_line or "").strip():
+            decoded_cmd = deob_res.deobfuscated_command
+            event.raw_attributes["decoded_command"] = decoded_cmd
+            event.raw_attributes["deobfuscation_result"] = deob_res.to_dict()
+        else:
+            decoded_cmd = self.decode_base64_command(event.command_line)
+            if decoded_cmd:
+                event.raw_attributes["decoded_command"] = decoded_cmd
+
+        preliminary_iocs = self.extract_preliminary_iocs(event, decoded_cmd)
+        if preliminary_iocs:
+            event.raw_attributes["preliminary_iocs"] = preliminary_iocs
+
+        return event
+
     def parse_alert(self, alert_input: Union[WazuhAlert, Dict[str, Any]]) -> ParsedEvent:
         """
         Bóc tách 1 cảnh báo WazuhAlert thành ParsedEvent với đầy đủ giải mã và IoCs sơ bộ.
@@ -182,25 +200,7 @@ class IngestionAgent:
 
         # Chuyển đổi cơ bản qua WazuhClientTool
         event = WazuhClientTool.convert_to_parsed_event(alert)
-
-        # Khử làm rối và giải mã câu lệnh chuyên sâu với AdvancedPowerShellDeobfuscator
-        deob_res = AdvancedPowerShellDeobfuscator.deobfuscate(event.command_line)
-        decoded_cmd = None
-        if deob_res.has_obfuscation and deob_res.deobfuscated_command.strip() != (event.command_line or "").strip():
-            decoded_cmd = deob_res.deobfuscated_command
-            event.raw_attributes["decoded_command"] = decoded_cmd
-            event.raw_attributes["deobfuscation_result"] = deob_res.to_dict()
-        else:
-            decoded_cmd = self.decode_base64_command(event.command_line)
-            if decoded_cmd:
-                event.raw_attributes["decoded_command"] = decoded_cmd
-
-        # Trích xuất sơ bộ IoCs
-        preliminary_iocs = self.extract_preliminary_iocs(event, decoded_cmd)
-        if preliminary_iocs:
-            event.raw_attributes["preliminary_iocs"] = preliminary_iocs
-
-        return event
+        return self._enrich_event_command_and_iocs(event)
 
     def create_incident_state(
         self,
@@ -233,7 +233,6 @@ class IngestionAgent:
             if isinstance(raw_alert, WazuhAlert):
                 payload_str = raw_alert.model_dump_json()
             elif isinstance(raw_alert, dict):
-                import json
                 payload_str = json.dumps(raw_alert, ensure_ascii=False)
             else:
                 payload_str = str(raw_alert)
@@ -290,14 +289,14 @@ class IngestionAgent:
     def process_state(self, state: IncidentState) -> IncidentState:
         """
         Bóc tách và chuẩn hóa toàn bộ raw_logs trong IncidentState thành parsed_events.
-        Hỗ trợ tích hợp mượt mà với StateGraphOrchestrator ingestion_node.
+        Hỗ trợ tích hợp mượt mà với StateGraphOrchestrator ingestion_node và hỗ trợ
+        đa nguồn log: Wazuh, Sysmon, Zeek, Suricata NIDS, Linux Syslog, WebServer, Generic.
         """
-        from src.tools.parsers import LogParserTool
-        import json
-
         for raw_item in state.raw_logs:
             source = (raw_item.log_source or "").lower()
             payload = raw_item.raw_payload
+            parsed_evt = None
+            already_enriched = False
 
             try:
                 if "wazuh" in source:
@@ -305,40 +304,48 @@ class IngestionAgent:
                         try:
                             payload_data = json.loads(payload)
                             parsed_evt = self.parse_alert(payload_data)
+                            already_enriched = True
                         except Exception:
                             parsed_evt = LogParserTool.parse_wazuh_alert(payload)
                     else:
                         parsed_evt = self.parse_alert(payload)
+                        already_enriched = True
                 elif "sysmon" in source:
                     parsed_evt = LogParserTool.parse_sysmon(payload)
                 elif "zeek" in source:
                     parsed_evt = LogParserTool.parse_zeek_conn(payload)
+                elif "suricata" in source or "nids" in source or "ids" in source:
+                    parsed_evt = LogParserTool.parse_suricata_alert(payload)
+                elif "linux" in source or "syslog" in source or "ssh" in source or "auditd" in source:
+                    parsed_evt = LogParserTool.parse_linux_syslog(payload)
+                elif "web" in source or "apache" in source or "nginx" in source or "http" in source:
+                    parsed_evt = LogParserTool.parse_web_log(payload)
                 elif "evtx" in source or "windows" in source:
                     parsed_evt = LogParserTool.parse_windows_evtx(payload)
                 else:
-                    parsed_evt = LogParserTool.parse_sysmon(payload)
-
-                # Khử làm rối và giải mã câu lệnh chuyên sâu với AdvancedPowerShellDeobfuscator
-                deob_res = AdvancedPowerShellDeobfuscator.deobfuscate(parsed_evt.command_line)
-                decoded_cmd = None
-                if deob_res.has_obfuscation and deob_res.deobfuscated_command.strip() != (parsed_evt.command_line or "").strip():
-                    decoded_cmd = deob_res.deobfuscated_command
-                    parsed_evt.raw_attributes["decoded_command"] = decoded_cmd
-                    parsed_evt.raw_attributes["deobfuscation_result"] = deob_res.to_dict()
-                else:
-                    decoded_cmd = self.decode_base64_command(parsed_evt.command_line)
-                    if decoded_cmd:
-                        parsed_evt.raw_attributes["decoded_command"] = decoded_cmd
-
-                # Trích xuất sơ bộ IoCs
-                preliminary_iocs = self.extract_preliminary_iocs(parsed_evt, decoded_cmd)
-                if preliminary_iocs:
-                    parsed_evt.raw_attributes["preliminary_iocs"] = preliminary_iocs
-
-                state.parsed_events.append(parsed_evt)
+                    parsed_evt = LogParserTool.parse_generic_wazuh(payload)
             except Exception as ex:
-                parsed_evt = LogParserTool.parse_sysmon(payload)
-                state.parsed_events.append(parsed_evt)
+                logger.warning(f"[DataIngestionAgent] Lỗi khi bóc tách log từ nguồn '{source}': {ex}")
+                try:
+                    parsed_evt = LogParserTool.parse_generic_wazuh(payload)
+                except Exception as inner_ex:
+                    parsed_evt = ParsedEvent(
+                        event_id=f"UNKNOWN-{uuid.uuid4().hex[:6]}",
+                        timestamp=datetime.now(timezone.utc),
+                        source_type=source or "Unknown",
+                        command_line=str(payload)[:200],
+                        raw_attributes={"error": str(inner_ex), "raw_payload": str(payload)[:200]}
+                    )
+
+            if parsed_evt is None:
+                parsed_evt = LogParserTool.parse_generic_wazuh(payload)
+
+            if not already_enriched:
+                try:
+                    self._enrich_event_command_and_iocs(parsed_evt)
+                except Exception as ex:
+                    logger.debug(f"[DataIngestionAgent] Bỏ qua lỗi hậu xử lý deobfuscation/IoC: {ex}")
+
+            state.parsed_events.append(parsed_evt)
 
         return state
-

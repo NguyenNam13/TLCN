@@ -246,6 +246,9 @@ class ActionScriptBundle(BaseModel):
     rollback_script: Optional[str] = Field(None, description="Kịch bản hoàn tác (Rollback)")
     instructions: str = Field("", description="Hướng dẫn vận hành cho SOC Analyst")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Thời điểm khởi tạo bundle")
+    is_critical_process: bool = Field(default=False, description="Cờ cảnh báo tiến trình hệ thống trọng yếu")
+    warning_message: Optional[str] = Field(default=None, description="Thông điệp cảnh báo an toàn hệ thống")
+    evidence_snapshot_included: bool = Field(default=False, description="Cờ đánh dấu kịch bản đã tích hợp Pre-response Snapshot bảo toàn chứng cứ")
 
 
 class RecommendedAction(BaseModel):

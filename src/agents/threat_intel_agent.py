@@ -47,7 +47,6 @@ class ThreatIntelAgent:
         re.IGNORECASE
     )
     HEX_MD5_REGEX = re.compile(r"\b[a-fA-F0-9]{32}\b")
-    HEX_SHA1_REGEX = re.compile(r"\b[a-fA-F0-9]{40}\b")
     HEX_SHA256_REGEX = re.compile(r"\b[a-fA-F0-9]{64}\b")
 
     def __init__(

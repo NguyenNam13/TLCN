@@ -12,7 +12,7 @@ Nhiệm vụ trọng tâm:
 6. Cung cấp các phương thức analyze_events() và analyze_state() xuất đối tượng RootCauseAnalysis chuẩn Pydantic v2.
 """
 
-from typing import List, Dict, Any, Optional, Set, Tuple
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime, timezone
 import re
 import logging
@@ -27,6 +27,7 @@ from src.core.schemas import (
 from src.core.state import IncidentState
 from src.core.time_utils import format_vn_time
 from src.agents.prompts import RCA_AGENT_SYSTEM_PROMPT
+from src.tools.threat_intel import ThreatIntelTools
 
 logger = logging.getLogger("RCAAgent")
 
@@ -153,6 +154,16 @@ class RCAAgent:
 
         parent_cmd = event.parent_command_line or parent_name
 
+        # Trích xuất định danh máy trạm để tránh xung đột PID đa máy trạm
+        host = (
+            event.host_name
+            or raw.get("Computer")
+            or raw.get("computer")
+            or raw.get("host")
+            or raw.get("agent_name")
+            or "DEFAULT_HOST"
+        )
+
         return {
             "pid": str(pid) if pid is not None else None,
             "ppid": str(ppid) if ppid is not None else None,
@@ -161,19 +172,17 @@ class RCAAgent:
             "parent_process": parent_name,
             "parent_command_line": parent_cmd,
             "timestamp": event.timestamp,
+            "host": host,
         }
 
     def _build_process_tree(self, events: List[ParsedEvent]) -> List[ProcessNode]:
         """
         Xây dựng danh sách ProcessNode tái hiện cấu trúc cây phả hệ tiến trình.
         Đảm bảo liên kết ParentPID -> PID chính xác ngay cả khi thiếu dữ liệu PID tường minh.
+        Hỗ trợ phân vùng cây tiến trình đa máy trạm (Host-Partitioned Process Forest) tránh xung đột PID.
         """
         if not events:
             return []
-
-        nodes_by_id: Dict[str, ProcessNode] = {}
-        id_counter = 1000
-        name_to_last_id: Dict[str, str] = {}
 
         # Thu thập toàn bộ sự kiện liên quan đến tiến trình
         proc_entries = []
@@ -185,89 +194,112 @@ class RCAAgent:
         if not proc_entries:
             return []
 
-        # Xử lý từng entry để xây dựng nút
-        for entry in proc_entries:
-            p_name = entry["process_name"]
-            p_name_lower = p_name.lower()
-            cmd = entry["command_line"]
-            parent_name = entry["parent_process"]
-            parent_name_lower = parent_name.lower() if parent_name else None
+        distinct_hosts = {e["host"] for e in proc_entries if e.get("host") and e["host"] != "DEFAULT_HOST"}
+        is_multi_host = len(distinct_hosts) > 1
+        id_counter = 1000
+        all_sorted_nodes: List[ProcessNode] = []
 
-            # 1. Xác định PID của tiến trình hiện tại
-            if entry["pid"]:
-                curr_id = str(entry["pid"])
-            else:
-                # Nếu đã có tiến trình cùng tên đang chạy mà không phải lệnh mới khác biệt hoàn toàn
-                id_counter += 1
-                curr_id = f"PID-{id_counter}"
+        from collections import defaultdict
+        entries_by_host = defaultdict(list)
+        for e in proc_entries:
+            entries_by_host[e["host"]].append(e)
 
-            # 2. Xác định Parent ID
-            parent_id = None
-            if entry["ppid"]:
-                parent_id = str(entry["ppid"])
-            elif parent_name_lower:
-                if parent_name_lower in name_to_last_id:
-                    parent_id = name_to_last_id[parent_name_lower]
-                else:
-                    # Tạo synthetic ID cho tiến trình cha nếu chưa có
+        for host, host_entries in entries_by_host.items():
+            host_nodes_by_id: Dict[str, ProcessNode] = {}
+            name_to_last_id: Dict[str, str] = {}
+
+            for entry in host_entries:
+                p_name = entry["process_name"]
+                p_name_lower = p_name.lower()
+                cmd = entry["command_line"]
+                parent_name = entry["parent_process"]
+                parent_name_lower = parent_name.lower() if parent_name else None
+
+                # 1. Xác định PID của tiến trình hiện tại (Gán namespace nếu đa máy trạm)
+                raw_pid = entry["pid"]
+                if not raw_pid:
                     id_counter += 1
-                    parent_id = f"PID-{id_counter}"
+                    raw_pid = f"PID-{id_counter}"
+                curr_id = f"{host}:{raw_pid}" if is_multi_host else raw_pid
 
-            # 3. Đảm bảo tiến trình cha tồn tại trong danh sách nút
-            if parent_id and parent_name and parent_id not in nodes_by_id:
-                parent_node = ProcessNode(
-                    process_id=parent_id,
-                    process_name=parent_name,
-                    command_line=entry["parent_command_line"] or parent_name,
-                    parent_id=None,
-                    is_malicious_origin=False,
-                )
-                nodes_by_id[parent_id] = parent_node
-                name_to_last_id[parent_name_lower] = parent_id
+                # 2. Xác định Parent ID
+                parent_id = None
+                raw_ppid = entry["ppid"]
+                if raw_ppid:
+                    parent_id = f"{host}:{raw_ppid}" if is_multi_host else raw_ppid
+                elif parent_name_lower:
+                    if parent_name_lower in name_to_last_id:
+                        parent_id = name_to_last_id[parent_name_lower]
+                    else:
+                        id_counter += 1
+                        synth_id = f"PID-{id_counter}"
+                        parent_id = f"{host}:{synth_id}" if is_multi_host else synth_id
 
-            # 4. Tạo hoặc cập nhật ProcessNode hiện tại
-            if curr_id in nodes_by_id:
-                # Cập nhật thông tin nếu có dòng lệnh chi tiết hơn
-                existing = nodes_by_id[curr_id]
-                if len(cmd) > len(existing.command_line):
-                    nodes_by_id[curr_id] = ProcessNode(
+                # 3. Đảm bảo tiến trình cha tồn tại trong cây của host
+                if parent_id and parent_name and parent_id not in host_nodes_by_id:
+                    parent_node = ProcessNode(
+                        process_id=parent_id,
+                        process_name=parent_name,
+                        command_line=entry["parent_command_line"] or parent_name,
+                        parent_id=None,
+                        is_malicious_origin=False,
+                        host_name=host if is_multi_host else None,
+                    )
+                    host_nodes_by_id[parent_id] = parent_node
+                    name_to_last_id[parent_name_lower] = parent_id
+
+                # 4. Tạo hoặc cập nhật ProcessNode hiện tại
+                if curr_id in host_nodes_by_id:
+                    existing = host_nodes_by_id[curr_id]
+                    if len(cmd) > len(existing.command_line):
+                        host_nodes_by_id[curr_id] = ProcessNode(
+                            process_id=curr_id,
+                            process_name=p_name,
+                            command_line=cmd,
+                            parent_id=existing.parent_id or parent_id,
+                            is_malicious_origin=existing.is_malicious_origin,
+                            host_name=host if is_multi_host else None,
+                        )
+                else:
+                    new_node = ProcessNode(
                         process_id=curr_id,
                         process_name=p_name,
                         command_line=cmd,
-                        parent_id=existing.parent_id or parent_id,
-                        is_malicious_origin=existing.is_malicious_origin,
+                        parent_id=parent_id,
+                        is_malicious_origin=False,
+                        host_name=host if is_multi_host else None,
                     )
-            else:
-                new_node = ProcessNode(
-                    process_id=curr_id,
-                    process_name=p_name,
-                    command_line=cmd,
-                    parent_id=parent_id,
-                    is_malicious_origin=False,
-                )
-                nodes_by_id[curr_id] = new_node
-                name_to_last_id[p_name_lower] = curr_id
+                    host_nodes_by_id[curr_id] = new_node
+                    name_to_last_id[p_name_lower] = curr_id
 
-        # 5. Sắp xếp các nút theo phả hệ hình cây (Topological Ancestor -> Descendant)
-        sorted_nodes = self._topological_sort_tree(list(nodes_by_id.values()))
+            sorted_host_nodes = self._topological_sort_tree(list(host_nodes_by_id.values()))
+            all_sorted_nodes.extend(sorted_host_nodes)
 
-        # 6. Gán cờ is_malicious_origin = True cho tiến trình gốc phát tán mã độc
-        self._assign_malicious_origin(sorted_nodes)
+        # 5. Gán cờ is_malicious_origin = True cho tiến trình gốc phát tán mã độc
+        self._assign_malicious_origin(all_sorted_nodes)
 
-        return sorted_nodes
+        return all_sorted_nodes
 
     def _topological_sort_tree(self, nodes: List[ProcessNode]) -> List[ProcessNode]:
-        """Sắp xếp cây tiến trình theo thứ tự từ gốc (Root/Ancestor) đến các nhánh con (Descendants)."""
+        """Sắp xếp cây tiến trình theo thứ tự từ gốc (Root/Ancestor) đến các nhánh con (Descendants).
+        Có cơ chế phát hiện chu trình (Cycle Detection) để chống lỗi RecursionError khi PID bị lặp vòng.
+        """
         node_map = {n.process_id: n for n in nodes}
         visited: Set[str] = set()
+        visiting: Set[str] = set()
         result: List[ProcessNode] = []
 
         def visit(n: ProcessNode):
             if n.process_id in visited:
                 return
+            if n.process_id in visiting:
+                # Bẻ gãy chu trình lặp vô hạn (Cycle detected do PID recycling)
+                return
+            visiting.add(n.process_id)
             # Nếu có cha và cha nằm trong danh sách nodes, duyệt cha trước
-            if n.parent_id and n.parent_id in node_map:
+            if n.parent_id and n.parent_id in node_map and n.parent_id != n.process_id:
                 visit(node_map[n.parent_id])
+            visiting.remove(n.process_id)
             visited.add(n.process_id)
             result.append(n)
 
@@ -291,33 +323,19 @@ class RCAAgent:
         parent_ids = {n.parent_id for n in nodes if n.parent_id}
         # Tập hợp các tiến trình có con (là tiến trình cha trong cây)
         nodes_with_children = {n.process_id for n in nodes if n.process_id in parent_ids}
+        all_node_ids = {node.process_id for node in nodes}
 
-        # Quy tắc 1: Office Macro / Phishing Attachment
-        # Nếu một ứng dụng Office (winword, excel, etc.) khởi tạo các công cụ dòng lệnh (cmd, powershell, wscript)
-        for n in nodes:
-            p_lower = n.process_name.lower()
-            if p_lower in OFFICE_APPLICATIONS and n.process_id in nodes_with_children:
-                n.is_malicious_origin = True
-                return
-
-        # Quy tắc 2: Web Server Exploit (w3wp, httpd, tomcat sinh shell)
-        for n in nodes:
-            p_lower = n.process_name.lower()
-            if p_lower in WEB_SERVER_APPS and n.process_id in nodes_with_children:
-                n.is_malicious_origin = True
-                return
-
-        # Quy tắc 3: Browser / PDF Viewer sinh shell hoặc downloaders
-        for n in nodes:
-            p_lower = n.process_name.lower()
-            if p_lower in BROWSER_AND_VIEWER_APPS and n.process_id in nodes_with_children:
-                n.is_malicious_origin = True
-                return
+        # Quy tắc 1-3: Office Macro, Web Server Exploit, Browser / PDF Viewer sinh shell hoặc downloaders
+        for app_group in (OFFICE_APPLICATIONS, WEB_SERVER_APPS, BROWSER_AND_VIEWER_APPS):
+            for n in nodes:
+                if n.process_name.lower() in app_group and n.process_id in nodes_with_children:
+                    n.is_malicious_origin = True
+                    return
 
         # Quy tắc 4: Tiến trình cha hợp lệ (explorer.exe, services.exe) sinh tiến trình mã độc
         # Trong trường hợp này, tiến trình con đầu tiên được sinh ra là Patient Zero
         for n in nodes:
-            if n.parent_id is None or n.parent_id not in {node.process_id for node in nodes}:
+            if n.parent_id is None or n.parent_id not in all_node_ids:
                 p_lower = n.process_name.lower()
                 if p_lower in BENIGN_SYSTEM_PARENTS:
                     # Tìm con trực tiếp của tiến trình hệ thống này
@@ -329,7 +347,7 @@ class RCAAgent:
         # Quy tắc 5: Nếu gốc của cây là một Living-Off-The-Land Binary (cmd, powershell, certutil, mshta)
         # hoặc file thực thi độc hại trực tiếp
         for n in nodes:
-            if n.parent_id is None or n.parent_id not in {node.process_id for node in nodes}:
+            if n.parent_id is None or n.parent_id not in all_node_ids:
                 n.is_malicious_origin = True
                 return
 
@@ -515,7 +533,7 @@ class RCAAgent:
 
         # Persistence
         if "schtasks" in all_cmds or "currentversion\\run" in all_cmds or "persistence" in all_groups or \
-           any("persistence" in d for d in [all_descs]):
+           "persistence" in all_descs:
             detected.add("Persistence")
 
         # Defense Evasion
@@ -656,7 +674,6 @@ class RCAAgent:
         all_cmds = " ".join([e.command_line or "" for e in events] + [n.command_line for n in process_tree]).lower()
         all_rule_ids = {str(e.raw_attributes.get("wazuh_rule_id", "")) for e in events}
         all_groups = {g.lower() for e in events for g in e.raw_attributes.get("wazuh_groups", [])}
-        all_sources = {e.source_type.lower() for e in events}
 
         # Kiểm tra False Positive / Benign
         is_routine_benign = all(
@@ -710,7 +727,7 @@ class RCAAgent:
         # Tổng hợp attack_scope
         hosts = sorted(list({e.host_name for e in events if e.host_name and e.host_name.upper() not in {"UNKNOWN", ""}}))
         users = sorted(list({e.user_name for e in events if e.user_name and e.user_name.upper() not in {"UNKNOWN", ""}}))
-        c2_ips = sorted(list({e.dest_ip for e in events if e.dest_ip and not e.dest_ip.startswith("127.") and not e.dest_ip.startswith("192.168.") and not e.dest_ip.startswith("10.")}))
+        c2_ips = sorted(list({e.dest_ip for e in events if e.dest_ip and not ThreatIntelTools.is_private_ip(e.dest_ip)}))
 
         if not is_routine_benign:
             scope_parts = []

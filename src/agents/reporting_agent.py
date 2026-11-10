@@ -15,21 +15,19 @@ Nhiệm vụ:
 4. Xuất bản báo cáo đa định dạng: Pydantic v2 Model, Markdown chuẩn hóa cho Streamlit UI, và JSON chuẩn.
 """
 
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Optional, Set, Tuple
 from datetime import datetime, timezone
-import json
 import logging
 
 from src.core.schemas import (
     IncidentStatus,
     SeverityLevel,
-    ActionType,
     IoCItem,
     RecommendedAction,
     IncidentReport,
 )
 from src.core.state import IncidentState
-from src.core.time_utils import format_vn_time, to_vn_time
+from src.core.time_utils import format_vn_time
 from src.agents.prompts import REPORTING_AGENT_SYSTEM_PROMPT
 
 logger = logging.getLogger("ReportingAgent")
@@ -440,6 +438,169 @@ class ReportingAgent:
         """
         return report.model_dump_json(indent=2)
 
+    @classmethod
+    def export_docx(
+        cls,
+        report: IncidentReport,
+        organization_name: Optional[str] = None
+    ) -> bytes:
+        """
+        Sinh tài liệu Word (.docx) chuyên nghiệp từ IncidentReport bằng python-docx.
+        Hỗ trợ gọi cả dưới dạng instance method (agent.export_docx(report)) lẫn class method (ReportingAgent.export_docx(report)).
+        
+        :param report: Đối tượng IncidentReport cần xuất bản.
+        :param organization_name: Tên cơ quan điều tra an ninh mạng.
+        :return: Mảng bytes của tệp DOCX sẵn sàng để lưu đĩa hoặc gửi qua HTTP download.
+        """
+        import io
+        try:
+            import docx
+            from docx.shared import Inches, Pt, RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.enum.table import WD_TABLE_ALIGNMENT
+        except ImportError:
+            raise ImportError(
+                "Thư viện 'python-docx' chưa được cài đặt. Vui lòng cài đặt: pip install python-docx"
+            )
+
+        if isinstance(cls, type):
+            org_name = organization_name or "TRƯỜNG ĐẠI HỌC SƯ PHẠM KỸ THUẬT TP. HỒ CHÍ MINH (HCMUTE)"
+        else:
+            org_name = getattr(cls, "organization_name", organization_name or "TRƯỜNG ĐẠI HỌC SƯ PHẠM KỸ THUẬT TP. HỒ CHÍ MINH (HCMUTE)")
+
+        doc = docx.Document()
+
+        # Cấu hình lề trang 1 inch
+        for section in doc.sections:
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+
+        # 1. Header Khóa luận & Cơ quan điều tra
+        p_header = doc.add_paragraph()
+        p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_uni = p_header.add_run(f"{org_name}\n")
+        r_uni.bold = True
+        r_uni.font.size = Pt(13)
+        r_uni.font.color.rgb = RGBColor(0, 51, 102)
+
+        r_dep = p_header.add_run("KHOA CÔNG NGHỆ THÔNG TIN - BỘ MÔN AN TOÀN THÔNG TIN\n")
+        r_dep.bold = True
+        r_dep.font.size = Pt(11)
+
+        r_sub = p_header.add_run("ĐỀ TÀI KHÓA LUẬN TỐT NGHIỆP: HỆ THỐNG SOC MULTI-AGENT PROTOTYPE V1.0\n")
+        r_sub.font.size = Pt(10)
+        r_sub.font.italic = True
+
+        doc.add_paragraph("―" * 45).alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # 2. Tiêu đề Báo cáo
+        p_title = doc.add_heading(level=0)
+        p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_title = p_title.add_run(f"🛡️ {report.incident_title}")
+        r_title.font.size = Pt(18)
+        r_title.bold = True
+        r_title.font.color.rgb = RGBColor(180, 0, 0)
+
+        # Metadata
+        p_meta = doc.add_paragraph()
+        p_meta.add_run("• Mã Báo cáo: ").bold = True
+        p_meta.add_run(f"{report.report_id}\n")
+        p_meta.add_run("• Thời gian xuất bản: ").bold = True
+        p_meta.add_run(f"{format_vn_time(report.created_at, '%Y-%m-%d %H:%M:%S (ICT / Giờ Việt Nam)')}\n")
+        p_meta.add_run("• Tiêu chuẩn tham chiếu: ").bold = True
+        p_meta.add_run("NIST SP 800-61 Rev.2 & MITRE ATT&CK Framework\n")
+
+        # 3. Mục 1: Executive Summary
+        h1 = doc.add_heading("1. Tóm lược điều hành (Executive Summary)", level=1)
+        h1.style.font.color.rgb = RGBColor(0, 51, 102)
+        p_exec = doc.add_paragraph()
+        r_exec = p_exec.add_run(report.executive_summary)
+        r_exec.font.size = Pt(11)
+
+        # 4. Mục 2: Detailed Technical Findings
+        h2 = doc.add_heading("2. Chi tiết kỹ thuật & Phân tích nguyên nhân (Technical Findings)", level=1)
+        h2.style.font.color.rgb = RGBColor(0, 51, 102)
+        p_tech = doc.add_paragraph()
+        p_tech.add_run(report.detailed_findings)
+
+        # 5. Mục 3: MITRE ATT&CK Matrix Mapping
+        h3 = doc.add_heading("3. Ma trận Kỹ thuật MITRE ATT&CK", level=1)
+        h3.style.font.color.rgb = RGBColor(0, 51, 102)
+        if report.mitre_attack_matrix_mapping:
+            for idx, tech in enumerate(report.mitre_attack_matrix_mapping, start=1):
+                doc.add_paragraph(f"{idx}. Mã Kỹ thuật: {tech}", style="List Bullet")
+        else:
+            doc.add_paragraph("Chưa ghi nhận mã kỹ thuật cụ thể.")
+
+        # 6. Mục 4: Bảng IoC
+        h4 = doc.add_heading("4. Danh sách Chỉ số Xâm phạm (IoC Table)", level=1)
+        h4.style.font.color.rgb = RGBColor(0, 51, 102)
+
+        if report.ioc_table:
+            table_ioc = doc.add_table(rows=1, cols=5)
+            table_ioc.alignment = WD_TABLE_ALIGNMENT.CENTER
+            hdr_cells = table_ioc.rows[0].cells
+            hdr_titles = ["STT", "Loại IoC", "Giá trị Chỉ số", "Điểm Độc hại", "Đánh giá"]
+            for i, title in enumerate(hdr_titles):
+                hdr_cells[i].text = title
+                hdr_cells[i].paragraphs[0].runs[0].bold = True
+
+            for idx, ioc in enumerate(report.ioc_table, start=1):
+                row_cells = table_ioc.add_row().cells
+                row_cells[0].text = str(idx)
+                row_cells[1].text = ioc.ioc_type
+                row_cells[2].text = ioc.value
+                row_cells[3].text = str(ioc.reputation_score or 0)
+                row_cells[4].text = "Độc hại" if ioc.is_malicious else "Đã kiểm tra"
+        else:
+            doc.add_paragraph("Không phát hiện chỉ số xâm phạm ngoài vùng tin cậy.")
+
+        # 7. Mục 5: Action Plan
+        h5 = doc.add_heading("5. Kế hoạch Phản ứng & Hành động Khắc phục (Action Plan)", level=1)
+        h5.style.font.color.rgb = RGBColor(0, 51, 102)
+
+        if report.action_plan:
+            table_act = doc.add_table(rows=1, cols=5)
+            table_act.alignment = WD_TABLE_ALIGNMENT.CENTER
+            hdr_cells_act = table_act.rows[0].cells
+            hdr_titles_act = ["Loại hành động", "Mục tiêu (Target)", "Ưu tiên", "Cần duyệt", "Trạng thái"]
+            for i, title in enumerate(hdr_titles_act):
+                hdr_cells_act[i].text = title
+                hdr_cells_act[i].paragraphs[0].runs[0].bold = True
+
+            for act in report.action_plan:
+                row_cells = table_act.add_row().cells
+                row_cells[0].text = act.action_type.value if hasattr(act.action_type, "value") else str(act.action_type)
+                row_cells[1].text = act.target
+                row_cells[2].text = f"Mức {act.priority}"
+                row_cells[3].text = "Có" if act.require_human_approval else "Không"
+                if act.is_approved is True:
+                    st_txt = "Đã duyệt"
+                elif act.is_approved is False:
+                    st_txt = "Bị từ chối"
+                else:
+                    st_txt = "Chờ duyệt"
+                row_cells[4].text = st_txt
+        else:
+            doc.add_paragraph("Không có hành động nào cần thực thi.")
+
+        # Footer
+        p_footer = doc.add_paragraph()
+        p_footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        p_footer.add_run(
+            f"\nBáo cáo tạo tự động bởi Hệ thống HCMUTE Multi-Agent SOC - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+        ).italic = True
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        return buf.getvalue()
+
+    # Alias tương thích ngược
+    generate_docx_report = export_docx
+
     # =====================================================================
     # 3. STATEGRAPH INTEGRATION (PROCESS_STATE)
     # =====================================================================
@@ -500,7 +661,7 @@ class ReportingAgent:
         }
         return status_map.get(state.status, str(state.status.value if hasattr(state.status, "value") else state.status))
 
-    def _extract_scope(self, state: IncidentState) -> (List[str], List[str]):
+    def _extract_scope(self, state: IncidentState) -> Tuple[List[str], List[str]]:
         """Trích xuất danh sách máy trạm (hosts) và người dùng (users) bị ảnh hưởng."""
         hosts: Set[str] = set()
         users: Set[str] = set()

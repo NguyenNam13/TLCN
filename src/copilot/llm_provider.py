@@ -3,33 +3,42 @@
 src/copilot/llm_provider.py
 Module cung cấp kết nối LLM Hybrid đa tầng cho SOC AI Copilot.
 Hỗ trợ:
-1. OmniRouter / OpenRouter Gateway (API Key: sk-ef66a7d650e47f60-d829ca-68de4552)
+1. OmniRouter / OpenRouter Gateway (Cấu hình qua biến môi trường OMNIROUTER_API_KEY)
 2. Local Ollama LLM (http://localhost:11434/api/chat)
 3. Tier 3 Deterministic CoT Engine: Rule-based Chain-of-Thought tổng hợp tự động từ IncidentState
    khi mất kết nối mạng hoặc API gặp sự cố timeout/lỗi.
 """
 
 import os
-import re
 import json
 import logging
-from typing import Optional, Dict, Any, Union, Iterator, List
+from typing import Optional, Any, Union, Iterator
 import requests
 
 logger = logging.getLogger("HybridLLMProvider")
 
-# Cấu hình mặc định
-DEFAULT_OMNIROUTER_API_KEY = "sk-ef66a7d650e47f60-d829ca-68de4552"
+# Cấu hình mặc định (Đọc từ biến môi trường, dùng mock dummy key cho môi trường dev/test)
+DEFAULT_OMNIROUTER_API_KEY = os.getenv("OMNIROUTER_API_KEY", "sk-soc-copilot-dev-dummy-key")
 DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_OMNIROUTER_ENDPOINT = "http://localhost:20128/v1/chat/completions"
 DEFAULT_MODEL = "AICODE"
-FALLBACK_MODELS = [
-    "AICODE",
-    "meta-llama/llama-3.3-70b-instruct",
-    "openai/gpt-4o-mini",
-]
 DEFAULT_OLLAMA_URL = "http://localhost:11434/api/chat"
 DEFAULT_OLLAMA_MODEL = "llama3:latest"
+
+
+def _iter_clean_lines(response: requests.Response) -> Iterator[str]:
+    """Đọc và chuẩn hóa từng dòng văn bản từ luồng phản hồi HTTP streaming."""
+    try:
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            if isinstance(line, bytes):
+                line = line.decode("utf-8", errors="ignore")
+            line = line.strip()
+            if line:
+                yield line
+    finally:
+        response.close()
 
 
 class HybridLLMProvider:
@@ -221,27 +230,19 @@ class HybridLLMProvider:
 
     def _stream_sse_chunks(self, response: requests.Response) -> Iterator[str]:
         """Trích xuất delta content từ luồng Server-Sent Events (SSE)."""
-        try:
-            for line in response.iter_lines(decode_unicode=True):
-                if not line:
+        for line in _iter_clean_lines(response):
+            if line.startswith("data:"):
+                raw_data = line[5:].strip()
+                if raw_data == "[DONE]":
+                    break
+                try:
+                    chunk_json = json.loads(raw_data)
+                    delta = chunk_json.get("choices", [{}])[0].get("delta", {})
+                    content = delta.get("content")
+                    if content:
+                        yield content
+                except json.JSONDecodeError:
                     continue
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8", errors="ignore")
-                line = line.strip()
-                if line.startswith("data:"):
-                    raw_data = line[5:].strip()
-                    if raw_data == "[DONE]":
-                        break
-                    try:
-                        chunk_json = json.loads(raw_data)
-                        delta = chunk_json.get("choices", [{}])[0].get("delta", {})
-                        content = delta.get("content")
-                        if content:
-                            yield content
-                    except json.JSONDecodeError:
-                        continue
-        finally:
-            response.close()
 
     # =========================================================================
     # GIAO TIẾP LOCAL OLLAMA REST API
@@ -282,24 +283,16 @@ class HybridLLMProvider:
 
     def _stream_ollama_ndjson(self, response: requests.Response) -> Iterator[str]:
         """Trích xuất message content từ newline-delimited JSON stream của Ollama."""
-        try:
-            for line in response.iter_lines(decode_unicode=True):
-                if not line:
-                    continue
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8", errors="ignore")
-                line = line.strip()
-                try:
-                    item = json.loads(line)
-                    content = item.get("message", {}).get("content", "")
-                    if content:
-                        yield content
-                    if item.get("done", False):
-                        break
-                except json.JSONDecodeError:
-                    continue
-        finally:
-            response.close()
+        for line in _iter_clean_lines(response):
+            try:
+                item = json.loads(line)
+                content = item.get("message", {}).get("content", "")
+                if content:
+                    yield content
+                if item.get("done", False):
+                    break
+            except json.JSONDecodeError:
+                continue
 
     # =========================================================================
     # TIER 3: DETERMINISTIC CHAIN-OF-THOUGHT (CoT) ENGINE
