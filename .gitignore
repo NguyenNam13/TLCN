@@ -38,9 +38,18 @@ build/
 dist/
 *.egg-info/
 
-# ChromaDB local state
+# ChromaDB local state & generated vector caches
 chroma_db/
 .chroma/
+data/chromadb/*.npz
+data/chromadb/embedding_cache_*.json
+
+# Evaluation traces & bulky raw result dumps
+data/eval/traces/
+results/eval/**/raw_results.json
+results/eval/latest/
+results/eval/smoke_offline/
+data/wazuh_alerts/
 
 # Operating system files
 .DS_Store

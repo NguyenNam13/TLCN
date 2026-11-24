@@ -8,9 +8,9 @@ và tương thích hoàn toàn với LangGraph StateGraph.
 
 import uuid
 from enum import Enum
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union, Literal
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices, model_validator
 
 
 class SeverityLevel(str, Enum):
@@ -142,6 +142,27 @@ class TriageOutput(BaseModel):
     primary_mitre_tactics: List[str] = Field(default_factory=list, description="Danh sách chiến thuật MITRE chính")
 
 
+class TriageCoTSteps(BaseModel):
+    """4 bước suy luận Chain-of-Thought của Triage Agent."""
+    observation: str = Field(..., description="Bước 1: Quan sát các hành vi đáng ngờ có trong bằng chứng")
+    contextualization: str = Field(..., description="Bước 2: Phân tích bối cảnh (công cụ hợp lệ hay bất thường)")
+    risk_scoring: str = Field(..., description="Bước 3: Lý giải điểm rủi ro và mức độ nghiêm trọng")
+    conclusion: str = Field(..., description="Bước 4: Kết luận True Positive / False Positive")
+
+
+class TriageLLMResult(BaseModel):
+    """Schema thống nhất cho đầu ra structured của LLM Triage (CoT + phân loại tấn công)."""
+    is_incident: bool = Field(..., description="True nếu là sự cố thực sự")
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Độ tin cậy (0.0 - 1.0)")
+    severity: SeverityLevel = Field(..., description="Mức độ nghiêm trọng")
+    score: float = Field(..., ge=0.0, le=100.0, description="Điểm rủi ro 0-100")
+    attack_category: AttackCategory = Field(..., description="Nhóm tấn công chính")
+    attack_type: str = Field(..., description="Định danh cụ thể loại tấn công")
+    primary_mitre_tactics: List[str] = Field(default_factory=list, description="Chiến thuật MITRE chính")
+    cot_steps: TriageCoTSteps = Field(..., description="Các bước suy luận CoT")
+    rationale: str = Field(..., description="Giải thích ngắn gọn căn cứ phân loại")
+
+
 # =====================================================================
 # 3. SCHEMAS CHO THREAT INTELLIGENCE (CTI) AGENT
 # =====================================================================
@@ -184,12 +205,36 @@ class ThreatIntelEnrichment(BaseModel):
     related_threat_actors: List[str] = Field(default_factory=list, description="Các nhóm tấn công (APTs)")
     mitre_techniques: List[str] = Field(default_factory=list, description="Các mã kỹ thuật MITRE ATT&CK (ví dụ: T1059.001)")
     enrichment_summary: str = Field(default="", description="Tóm tắt kết quả tra cứu và làm giàu thông tin")
+    rag_mitre_context: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Ngữ cảnh kỹ thuật MITRE ATT&CK bổ sung từ RAG Knowledge Base",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if self.indicators and not self.extracted_iocs:
             self.extracted_iocs = self.indicators
         elif self.extracted_iocs and not self.indicators:
             self.indicators = self.extracted_iocs
+
+
+class ThreatIntelLLMAnalysis(BaseModel):
+    """Kết quả phân tích CTI & ánh xạ MITRE ATT&CK structured từ LLM (IoCs và điểm CTI giữ 100% deterministic)."""
+    mitre_techniques: List[str] = Field(
+        default_factory=list,
+        description="Danh sách mã kỹ thuật MITRE ATT&CK hợp lệ (định dạng Txxxx hoặc Txxxx.xxx)",
+    )
+    mitre_rationale: str = Field(
+        default="",
+        description="Lý giải ngắn gọn cơ sở ánh xạ các mã kỹ thuật MITRE ATT&CK từ bằng chứng và RAG",
+    )
+    threat_assessment_summary: str = Field(
+        default="",
+        description="Tóm tắt đánh giá tình báo mối đe dọa ngắn gọn, bám sát bằng chứng đã cung cấp",
+    )
+    evidence_citations: List[str] = Field(
+        default_factory=list,
+        description="Danh sách trích dẫn bằng chứng cụ thể từ sự kiện và ngữ cảnh RAG",
+    )
 
 
 # =====================================================================
@@ -202,6 +247,7 @@ class ProcessNode(BaseModel):
     command_line: str = Field(..., description="Dòng lệnh thực thi")
     parent_id: Optional[str] = Field(None, description="PID của tiến trình cha")
     is_malicious_origin: bool = Field(False, description="Có phải điểm bắt đầu của mã độc/tấn công không")
+    host_name: Optional[str] = Field(default=None, description="Tên máy chủ thực thi tiến trình")
 
 
 class HighFidelityProcessNode(ProcessNode):
@@ -229,6 +275,19 @@ class RootCauseAnalysis(BaseModel):
     root_cause_summary: str = Field(..., description="Báo cáo phân tích nguyên nhân gốc rễ chi tiết")
     confirmed_attack_type: Optional[str] = Field(default=None, description="Định danh loại tấn công đã xác nhận qua RCA")
     attack_scope: Optional[str] = Field(default=None, description="Phạm vi ảnh hưởng của tấn công")
+
+
+class RCALLMAnalysis(BaseModel):
+    """Kết quả structured của LLM cho RCA Agent (phân tích nhận thức, bám sát bằng chứng)."""
+    defense_evasion_techniques: List[str] = Field(default_factory=list)
+    child_process_purposes: List[str] = Field(default_factory=list)
+    attacker_objective: str = Field(..., description="Mục tiêu / động cơ của kẻ tấn công")
+    refined_initial_access_vector: Optional[str] = None
+    refined_attack_type: Optional[str] = None
+    mitre_tactics_inferred: List[str] = Field(default_factory=list)
+    analyst_feedback_addressed: Optional[str] = None
+    cognitive_narrative: str = Field(..., description="Diễn giải nhận thức bám sát bằng chứng")
+    evidence_citations: List[str] = Field(default_factory=list)
 
 
 # =====================================================================
@@ -265,9 +324,99 @@ class RecommendedAction(BaseModel):
     script_bundle: Optional[ActionScriptBundle] = Field(None, description="Gói kịch bản thực thi tự động")
 
 
+class ActionAdjustment(BaseModel):
+    """Điều chỉnh do LLM đề xuất lên một hành động ứng phó xác định (deterministic) hiện có."""
+    action_id: Optional[str] = None
+    action_type: ActionType
+    target: str
+    operation: Literal["KEEP", "REPRIORITIZE", "CUSTOMIZE_RATIONALE", "SUPPRESS_PER_FEEDBACK"]
+    new_priority: Optional[int] = Field(default=None, ge=1, le=5)
+    custom_description: Optional[str] = None
+    reason: str
+
+
+class ResponseLLMStrategy(BaseModel):
+    """Chiến lược ứng phó structured do LLM sinh ra cho Response Agent."""
+    rationale: str
+    containment_guidance: str
+    eradication_recovery_guidance: str
+    operational_safety_notes: str
+    analyst_feedback_addressed: Optional[str] = None
+    action_adjustments: List[ActionAdjustment] = Field(default_factory=list)
+    rag_citations: List[str] = Field(default_factory=list)
+    strategy_summary: str
+
+
 # =====================================================================
-# 6. SCHEMAS CHO REPORTING AGENT
+# 6. SCHEMAS CHO REPORTING AGENT (GROUNDED TELEMETRY & STRUCTURED REPORT)
 # =====================================================================
+class OperationalMetrics(BaseModel):
+    """Chỉ số vận hành ứng cứu sự cố thực đo từ IncidentState."""
+    mtta_display: str = "N/A (Chưa đo)"
+    mttc_display: str = "N/A (Chưa đo)"
+    mttr_display: str = "N/A (Chưa đo)"
+    mtta_seconds: Optional[float] = None
+    mttc_seconds: Optional[float] = None
+    mttr_seconds: Optional[float] = None
+    sla_status: str = "Chưa đánh giá"
+
+
+class CIADimension(BaseModel):
+    """Đánh giá một chiều trong bộ ba an toàn thông tin (CIA Triad)."""
+    level: str = Field(default="Không (None)", description="Mức độ tác động: Không/Thấp/Trung bình/Cao")
+    assessment: str = Field(default="", description="Đánh giá gắn với bằng chứng thực tế trong IncidentState")
+
+
+class ImpactAssessment(BaseModel):
+    """Đánh giá tác động toàn diện CIA, vận hành, tài chính và tuân thủ pháp lý."""
+    confidentiality: CIADimension = Field(default_factory=CIADimension)
+    integrity: CIADimension = Field(default_factory=CIADimension)
+    availability: CIADimension = Field(default_factory=CIADimension)
+    operational_sla_note: str = ""
+    financial_impact_note: str = ""
+    compliance_note: str = ""
+
+
+class DeepRCABreakdown(BaseModel):
+    """Phân tích nguyên nhân gốc rễ chuyên sâu (3 tầng, 5 Whys, Ishikawa)."""
+    applicable: bool = True
+    proximate_cause: str = ""
+    contributing_factors: str = ""
+    root_cause: str = ""
+    five_whys: List[str] = Field(default_factory=list)
+    ishikawa_factors: List[Dict[str, str]] = Field(default_factory=list)
+
+
+class VerificationGateItem(BaseModel):
+    """Hạng mục kiểm định an toàn trước khi khôi phục hệ thống (Integrity Gate)."""
+    label: str
+    checked: bool = False
+    detail: str = ""
+
+
+class CAPAItem(BaseModel):
+    """Hạng mục trong kế hoạch khắc phục và phòng ngừa dài hạn (CAPA)."""
+    code: str
+    item: str
+    category: str = "Công nghệ"
+    priority: str = "P2"
+    raci: str = ""
+    timeline: str = ""
+    kpi: str = ""
+
+
+class ReportingLLMSynthesis(BaseModel):
+    """Kết quả tổng hợp structured của LLM cho Reporting Agent (grounded vào IncidentState)."""
+    executive_advisory: str
+    business_impact_assessment: str = ""
+    cia_rationale: Optional[Dict[str, str]] = None
+    five_whys: List[str] = Field(default_factory=list)
+    ishikawa_factors: List[Dict[str, str]] = Field(default_factory=list)
+    strategic_lessons_learned: List[str] = Field(default_factory=list)
+    capa_recommendations: List[CAPAItem] = Field(default_factory=list)
+    evidence_citations: List[str] = Field(default_factory=list)
+
+
 class IncidentReport(BaseModel):
     """Báo cáo điều tra sự cố toàn diện cuối cùng."""
     report_id: str = Field(..., description="Mã định danh báo cáo")
@@ -281,3 +430,132 @@ class IncidentReport(BaseModel):
     attack_type: Optional[str] = Field(default=None, description="Loại tấn công chính được xác định")
     attack_category: Optional[str] = Field(default=None, description="Nhóm phân loại tấn công")
     confidence_level: Optional[float] = Field(default=None, description="Độ tin cậy tổng thể của phán đoán (0.0 - 1.0)")
+    # Các trường mở rộng grounded telemetry & báo cáo chuyên sâu (tương thích ngược 100%)
+    severity: Optional[str] = Field(default=None, description="Mức độ nghiêm trọng thực tế của sự cố")
+    incident_status: Optional[str] = Field(default=None, description="Trạng thái xử lý sự cố tại thời điểm xuất báo cáo")
+    is_incident: Optional[bool] = Field(default=None, description="True nếu là sự cố thực sự, False nếu False Positive")
+    organization_name: Optional[str] = Field(default=None, description="Tên cơ quan/tổ chức điều tra")
+    response_strategy_summary: Optional[str] = Field(default=None, description="Tóm tắt chiến lược phản ứng từ RAG & LLM")
+    llm_grounded: bool = Field(default=False, description="Cờ đánh dấu báo cáo đã qua kiểm chứng grounding thực thể")
+    operational_metrics: Optional[Union[OperationalMetrics, Dict[str, Any]]] = Field(
+        default=None,
+        description="Chỉ số vận hành IR thực đo từ timeline sự cố (MTTA, MTTC, MTTR, SLA)",
+    )
+    impact_assessment: Optional[Union[ImpactAssessment, Dict[str, Any]]] = Field(
+        default=None,
+        description="Đánh giá mức độ ảnh hưởng CIA, vận hành và tuân thủ pháp lý",
+    )
+    deep_rca_breakdown: Optional[Union[DeepRCABreakdown, Dict[str, Any]]] = Field(
+        default=None,
+        description="Phân tích nguyên nhân gốc rễ chuyên sâu (3 tầng, 5 Whys, Ishikawa)",
+    )
+    verification_checklist: Optional[List[Union[VerificationGateItem, Dict[str, Any]]]] = Field(
+        default=None,
+        description="Danh sách kiểm định an toàn trước khi khôi phục (Integrity Verification Gate)",
+    )
+    verification_gate: List[Union[VerificationGateItem, Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="Danh sách cổng kiểm định an toàn (đồng bộ với verification_checklist)",
+    )
+    capa_plan: Optional[Union[List[Union[CAPAItem, Dict[str, Any]]], Dict[str, Any]]] = Field(
+        default=None,
+        description="Kế hoạch hành động khắc phục & phòng ngừa dài hạn (CAPA)",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.verification_checklist is not None and not self.verification_gate:
+            self.verification_gate = list(self.verification_checklist)
+        elif self.verification_gate and self.verification_checklist is None:
+            self.verification_checklist = list(self.verification_gate)
+
+
+# =====================================================================
+# 7. SCHEMAS CHO LLM HEALTH & TELEMETRY OBSERVABILITY
+# =====================================================================
+class LLMHealthStatus(BaseModel):
+    """Trạng thái kiểm tra sức khỏe kết nối LLM Gateway thực tế."""
+    connected: bool = False
+    active_provider: str = "deterministic"
+    configured_mode: str = "auto"
+    endpoint: str = ""
+    model: str = ""
+    latency_ms: Optional[float] = None
+    using_dummy_key: bool = False
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    detail: str = ""
+    error: Optional[str] = None
+
+
+class LLMCallTelemetry(BaseModel):
+    """Bản ghi đo lường chi tiết từng lượt gọi LLM trong pipeline và Copilot."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    call_id: str = Field(default_factory=lambda: f"LLM-{uuid.uuid4().hex[:8].upper()}")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    agent_name: str = Field(
+        default="Unknown",
+        validation_alias=AliasChoices("agent_name", "agent"),
+        description="Tên Agent hoặc thành phần gọi LLM",
+    )
+    node: Optional[str] = Field(default=None, description="Tên node thực thi trong StateGraph")
+    model_tier: str = Field(default="default", description="Tầng model: fast, reasoning, default")
+    provider_used: str = Field(
+        default="deterministic",
+        validation_alias=AliasChoices("provider_used", "provider"),
+        description="Provider thực tế: omnirouter, openrouter, ollama, deterministic, skipped_tiered",
+    )
+    model: str = Field(default="", description="Tên model được sử dụng")
+    latency_ms: float = Field(default=0.0, ge=0.0, description="Độ trễ thực thi (ms)")
+    prompt_tokens: int = Field(default=0, ge=0)
+    completion_tokens: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
+    usage_estimated: bool = Field(default=False, description="True nếu token được ước lượng khi thiếu usage từ API")
+    structured_attempts: int = Field(default=1, ge=0)
+    self_corrected: bool = Field(default=False)
+    schema_valid: bool = Field(default=True)
+    schema_name: Optional[str] = Field(default=None)
+    tool_calls_count: int = Field(default=0, ge=0)
+    success: bool = Field(default=True)
+    fallback_reason: Optional[str] = Field(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            normalized = dict(data)
+            if "structured_attempts" not in normalized and "self_correction_attempts" in normalized:
+                try:
+                    normalized["structured_attempts"] = 1 + max(0, int(normalized["self_correction_attempts"]))
+                except (TypeError, ValueError):
+                    pass
+            return normalized
+        return data
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.total_tokens == 0 and (self.prompt_tokens > 0 or self.completion_tokens > 0):
+            self.total_tokens = self.prompt_tokens + self.completion_tokens
+        if self.structured_attempts > 1 and not self.self_corrected:
+            self.self_corrected = True
+
+    @property
+    def agent(self) -> str:
+        return self.agent_name
+
+    @property
+    def provider(self) -> str:
+        return self.provider_used
+
+    @property
+    def self_correction_attempts(self) -> int:
+        return max(0, self.structured_attempts - 1)
+
+
+class LLMCompletionResult(BaseModel):
+    """Kết quả trả về từ lời gọi Chat Completion có hỗ trợ Tool Calling chuẩn OpenAI."""
+    content: str = ""
+    tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
+    finish_reason: Optional[str] = None
+    provider_used: Optional[str] = None
+    model: Optional[str] = None
+    telemetry: Optional[LLMCallTelemetry] = None
+
