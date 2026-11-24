@@ -1,0 +1,4 @@
+mode,total_queries,hit_at_1,hit_at_3,mrr_at_5,ndcg_at_5,mean_latency_ms,en_hit_at_1,en_hit_at_3,en_mrr_at_5,vi_hit_at_1,vi_hit_at_3,vi_mrr_at_5,ood_hit_at_1,ood_hit_at_3,ood_mrr_at_5
+legacy_tfidf,40,0.9,1.0,0.95,0.9499,0.084,1.0,1.0,1.0,0.8462,1.0,0.9231,0.8333,1.0,0.9167
+bm25,40,0.95,1.0,0.975,0.9607,0.211,1.0,1.0,1.0,1.0,1.0,1.0,0.8333,1.0,0.9167
+hybrid_rrf,40,0.975,1.0,0.9875,0.9743,1.014,1.0,1.0,1.0,1.0,1.0,1.0,0.9167,1.0,0.9583
