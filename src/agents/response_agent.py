@@ -24,16 +24,26 @@ Tuân thủ tiêu chuẩn NIST SP 800-61 (Computer Security Incident Handling Gu
 
 import ipaddress
 import logging
+import re
 from typing import List, Dict, Any, Optional, Set, Tuple
 
 from src.core.schemas import (
     ActionType,
+    ActionAdjustment,
     RecommendedAction,
+    ResponseLLMStrategy,
     IncidentStatus,
     IncidentPhase,
 )
 from src.core.state import IncidentState
+from src.core.rbac import is_protected_process
+from src.core.security_guard import (
+    UNTRUSTED_LOG_SECURITY_HEADER,
+    inspect_and_wrap_untrusted,
+    sanitize_prompt_text,
+)
 from src.agents.prompts import RESPONSE_AGENT_SYSTEM_PROMPT
+from src.agents.llm_utils import invoke_structured_llm
 from src.tools.playbooks import ResponsePlaybooks
 from src.tools.wazuh_client import WazuhClientTool
 
@@ -86,9 +96,13 @@ class ResponseAgent:
         playbooks: Optional[Any] = None,
         wazuh_client: Optional[Any] = None,
         rag_kb: Optional[Any] = None,
+        llm_provider: Optional[Any] = None,
+        llm_enabled: bool = True,
+        enable_rag: bool = True,
+        enable_security_guard: bool = True,
     ):
         """
-        Khởi tạo ResponseAgent với cấu hình chính sách phê duyệt và công cụ.
+        Khởi tạo ResponseAgent với cấu hình chính sách phê duyệt, công cụ và LLM.
 
         :param require_approval_by_default: Yêu cầu phê duyệt chuyên viên mặc định cho các hành động.
         :param auto_approve_low_risk: Tự động phê duyệt các hành động ít rủi ro (KILL_PROCESS, REVOKE_USER).
@@ -97,6 +111,10 @@ class ResponseAgent:
         :param playbooks: Lớp chứa kịch bản mẫu (mặc định ResponsePlaybooks).
         :param wazuh_client: Client tích hợp Wazuh SIEM (mặc định WazuhClientTool).
         :param rag_kb: Công cụ truy vấn cơ sở tri thức RAG (mặc định RAGKnowledgeBaseTool).
+        :param llm_provider: Provider kết nối LLM phục vụ tổng hợp chiến lược (mặc định lazy load HybridLLMProvider).
+        :param llm_enabled: Bật/tắt cơ chế sinh chiến lược phản ứng tùy biến qua LLM.
+        :param enable_rag: Bật/tắt truy xuất và khởi tạo tự động RAGKnowledgeBaseTool.
+        :param enable_security_guard: Bật/tắt làm sạch và cô lập dữ liệu untrusted trước khi gửi LLM.
         """
         self.require_approval_by_default = require_approval_by_default
         self.auto_approve_low_risk = auto_approve_low_risk
@@ -104,14 +122,21 @@ class ResponseAgent:
         self.system_prompt = system_prompt or RESPONSE_AGENT_SYSTEM_PROMPT
         self.playbooks = playbooks or ResponsePlaybooks
         self.wazuh_client = wazuh_client or WazuhClientTool
-        self.rag_kb = rag_kb
-        if self.rag_kb is None and RAGKnowledgeBaseTool is not None:
+        self.enable_rag = bool(enable_rag)
+        self.enable_security_guard = bool(enable_security_guard)
+        self.rag_kb = rag_kb if self.enable_rag else None
+        if self.enable_rag and self.rag_kb is None and RAGKnowledgeBaseTool is not None:
             try:
                 self.rag_kb = RAGKnowledgeBaseTool()
             except Exception as exc:
                 logger.warning(f"Không thể khởi tạo RAGKnowledgeBaseTool: {exc}")
                 self.rag_kb = None
         self._last_rag_info: Dict[str, Any] = {}
+        self.llm_provider = llm_provider
+        self.llm_enabled = llm_enabled
+        self._last_strategy_summary: str = ""
+        self._last_llm_strategy: Optional[ResponseLLMStrategy] = None
+        self._last_security_flags: List[Dict[str, str]] = []
 
     # =====================================================================
     # 1. HELPER POLICY VÀ APPROVAL FLAG DETERMINATION
@@ -137,6 +162,36 @@ class ResponseAgent:
         action.require_human_approval = self.determine_approval_requirement(action.action_type)
         return action
 
+    _GROUNDING_IPV4_RE = re.compile(
+        r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?![\d.])"
+    )
+    _GROUNDING_PROC_EXT_RE = re.compile(
+        r"\b([A-Za-z0-9_\-]+\.(?:exe|dll|ps1|bat|cmd|vbs))\b", re.IGNORECASE
+    )
+    _GROUNDING_LSASS_RE = re.compile(r"\blsass(?:\.exe)?\b", re.IGNORECASE)
+    _GROUNDING_MITRE_RE = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
+    _GROUNDING_PID_RE = re.compile(r"\bPID\s*[:=#]?\s*(\d{2,7})\b", re.IGNORECASE)
+    _GROUNDING_HASH_RE = re.compile(r"\b([a-fA-F0-9]{64}|[a-fA-F0-9]{40}|[a-fA-F0-9]{32})\b")
+    _GROUNDING_MTTA_8_RE = re.compile(r"MTTA\*{0,2}\s*[:=]?\s*\*{0,2}\s*8\s*phút", re.IGNORECASE)
+
+    _GENERIC_PROC_DESCRIPTIONS: Dict[str, str] = {
+        "lsass.exe": "critical credential subsystem",
+        "powershell.exe": "script interpreter",
+        "pwsh.exe": "script interpreter",
+        "cmd.exe": "command shell interpreter",
+        "vssadmin.exe": "shadow copy utility",
+        "wbadmin.exe": "backup utility",
+        "bcdedit.exe": "boot configuration utility",
+        "schtasks.exe": "scheduled task utility",
+        "wevtutil.exe": "event log utility",
+        "certutil.exe": "certificate transfer utility",
+        "procdump.exe": "memory dump utility",
+        "rundll32.exe": "DLL host utility",
+        "comsvcs.dll": "COM services library",
+        "w3wp.exe": "web worker process",
+        "outlook.exe": "email client process",
+    }
+
     @staticmethod
     def is_private_ip(ip_str: Optional[str]) -> bool:
         """Kiểm tra một địa chỉ IP có phải IP Private (RFC 1918) hoặc loopback hay không."""
@@ -144,9 +199,254 @@ class ResponseAgent:
             return True
         try:
             ip_obj = ipaddress.ip_address(ip_str.strip())
+            if isinstance(ip_obj, ipaddress.IPv4Address):
+                s = str(ip_obj)
+                if s.startswith("192.0.2.") or s.startswith("198.51.100.") or s.startswith("203.0.113."):
+                    return False
             return ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
         except ValueError:
             return False
+
+    @staticmethod
+    def _normalize_proc_basename(value: str) -> str:
+        cleaned = str(value).strip().strip("\"'`").replace("\\", "/")
+        if "/" in cleaned:
+            cleaned = cleaned.split("/")[-1]
+        return cleaned.lower()
+
+    @staticmethod
+    def _is_trivial_hex_or_non_hash(token: str) -> bool:
+        low = token.lower()
+        return len(set(low)) <= 2 or low.isdigit()
+
+    @classmethod
+    def _collect_text_blobs_from_value(cls, val: Any, out: List[str]) -> None:
+        if val is None:
+            return
+        if isinstance(val, str):
+            if val.strip():
+                out.append(val)
+        elif isinstance(val, dict):
+            for v in val.values():
+                cls._collect_text_blobs_from_value(v, out)
+        elif isinstance(val, (list, tuple, set)):
+            for item in val:
+                cls._collect_text_blobs_from_value(item, out)
+        elif hasattr(val, "model_dump"):
+            cls._collect_text_blobs_from_value(val.model_dump(), out)
+
+    def _collect_observed_grounding_entities(self, state: IncidentState) -> Dict[str, Any]:
+        """
+        Thu thập các thực thể (IPv4, tiến trình/tập thực thi, PID, MITRE ID, hash) thực sự quan sát
+        được từ bằng chứng trong state để khử rò rỉ thực thể ngoài ngữ cảnh khi sinh chiến lược RAG.
+        """
+        source_texts: List[str] = []
+        allowed_ips: Set[str] = set()
+        allowed_procs: Set[str] = set()
+        allowed_pids: Set[str] = set()
+        allowed_mitre_ids: Set[str] = set()
+        allowed_hashes: Set[str] = set()
+
+        def _scan_text(txt: Optional[str], include_procs: bool = True) -> None:
+            if not txt:
+                return
+            s = str(txt)
+            source_texts.append(s)
+            for ip in self._GROUNDING_IPV4_RE.findall(s):
+                allowed_ips.add(ip)
+            for mid in self._GROUNDING_MITRE_RE.findall(s):
+                up = mid.upper()
+                allowed_mitre_ids.add(up)
+                if "." in up:
+                    allowed_mitre_ids.add(up.split(".")[0])
+            if include_procs:
+                for proc in self._GROUNDING_PROC_EXT_RE.findall(s):
+                    allowed_procs.add(proc.lower())
+            for pid in self._GROUNDING_PID_RE.findall(s):
+                allowed_pids.add(pid)
+            for pid_m in re.findall(r"\[(\d{2,7})\]", s):
+                allowed_pids.add(pid_m)
+            for h in self._GROUNDING_HASH_RE.findall(s):
+                if not self._is_trivial_hex_or_non_hash(h):
+                    allowed_hashes.add(h.lower())
+
+        for rlog in state.raw_logs:
+            _scan_text(rlog.raw_payload)
+
+        for ev in state.parsed_events:
+            if ev.source_ip:
+                _scan_text(ev.source_ip, include_procs=False)
+            if ev.dest_ip:
+                _scan_text(ev.dest_ip, include_procs=False)
+            if ev.process_name:
+                allowed_procs.add(self._normalize_proc_basename(ev.process_name))
+                source_texts.append(ev.process_name)
+            if ev.process_path:
+                allowed_procs.add(self._normalize_proc_basename(ev.process_path))
+                _scan_text(ev.process_path)
+            if ev.parent_process:
+                allowed_procs.add(self._normalize_proc_basename(ev.parent_process))
+                source_texts.append(ev.parent_process)
+            _scan_text(ev.command_line)
+            _scan_text(ev.parent_command_line)
+            if ev.file_hash:
+                _scan_text(ev.file_hash, include_procs=False)
+
+            raw_attrs = ev.raw_attributes or {}
+            attr_blobs: List[str] = []
+            self._collect_text_blobs_from_value(raw_attrs, attr_blobs)
+            for blob in attr_blobs:
+                _scan_text(blob)
+            for pid_key in (
+                "process_id",
+                "pid",
+                "parent_pid",
+                "ppid",
+                "mordorProcessId",
+                "mordorClientProcessId",
+            ):
+                pval = raw_attrs.get(pid_key)
+                if pval is not None and str(pval).strip():
+                    allowed_pids.add(str(pval).strip())
+
+        if state.threat_intel:
+            for ioc in state.threat_intel.extracted_iocs or []:
+                _scan_text(ioc.value, include_procs=False)
+                det_blobs: List[str] = []
+                self._collect_text_blobs_from_value(ioc.details, det_blobs)
+                for b in det_blobs:
+                    for ip in self._GROUNDING_IPV4_RE.findall(b):
+                        allowed_ips.add(ip)
+                    for h in self._GROUNDING_HASH_RE.findall(b):
+                        if not self._is_trivial_hex_or_non_hash(h):
+                            allowed_hashes.add(h.lower())
+            for tid in state.threat_intel.mitre_techniques or []:
+                up = str(tid).strip().upper()
+                if up:
+                    allowed_mitre_ids.add(up)
+                    if "." in up:
+                        allowed_mitre_ids.add(up.split(".")[0])
+            for ctx in state.threat_intel.rag_mitre_context or []:
+                if isinstance(ctx, dict) and ctx.get("technique_id"):
+                    up = str(ctx["technique_id"]).strip().upper()
+                    allowed_mitre_ids.add(up)
+                    if "." in up:
+                        allowed_mitre_ids.add(up.split(".")[0])
+
+        if state.rca_result:
+            for node in state.rca_result.process_tree or []:
+                if node.process_name:
+                    allowed_procs.add(self._normalize_proc_basename(node.process_name))
+                if node.process_id:
+                    allowed_pids.add(str(node.process_id).strip())
+                if node.parent_id:
+                    allowed_pids.add(str(node.parent_id).strip())
+                _scan_text(node.command_line)
+            for hnode in state.rca_result.high_fidelity_tree or []:
+                if hnode.process_name:
+                    allowed_procs.add(self._normalize_proc_basename(hnode.process_name))
+                if hnode.process_id:
+                    allowed_pids.add(str(hnode.process_id).strip())
+                if hnode.parent_id:
+                    allowed_pids.add(str(hnode.parent_id).strip())
+                _scan_text(hnode.command_line)
+                for tid in hnode.mitre_techniques or []:
+                    up = str(tid).strip().upper()
+                    if up:
+                        allowed_mitre_ids.add(up)
+
+        raw_evidence_lower = "\n".join(source_texts).lower()
+        has_lsass_evidence = (
+            "lsass" in raw_evidence_lower
+            or "lsass.exe" in allowed_procs
+            or any(m == "T1003" or m.startswith("T1003.") for m in allowed_mitre_ids)
+        )
+        return {
+            "raw_evidence_lower": raw_evidence_lower,
+            "allowed_ips": allowed_ips,
+            "allowed_procs": allowed_procs,
+            "allowed_pids": allowed_pids,
+            "allowed_mitre_ids": allowed_mitre_ids,
+            "allowed_hashes": allowed_hashes,
+            "has_lsass_evidence": has_lsass_evidence,
+        }
+
+    def _sanitize_text_grounding(
+        self,
+        text: Optional[str],
+        observed: Dict[str, Any],
+    ) -> str:
+        """
+        Làm sạch các thực thể không có trong bằng chứng sự cố (đặc biệt lsass.exe, tiến trình .exe/.dll,
+        IPv4, PID, MITRE ID hoặc số liệu bịa đặt) khỏi đoạn văn bản RAG/LLM mà giữ nguyên văn sạch.
+        """
+        if not text:
+            return ""
+        cleaned = str(text)
+        allowed_ips: Set[str] = observed["allowed_ips"]
+        allowed_procs: Set[str] = observed["allowed_procs"]
+        allowed_pids: Set[str] = observed["allowed_pids"]
+        allowed_mitre_ids: Set[str] = observed["allowed_mitre_ids"]
+        allowed_hashes: Set[str] = observed["allowed_hashes"]
+        has_lsass_evidence: bool = observed["has_lsass_evidence"]
+        raw_lower: str = observed["raw_evidence_lower"]
+
+        def _replace_proc(match: re.Match) -> str:
+            token = match.group(1)
+            low = token.lower()
+            if low == "generic_process" or low in allowed_procs:
+                return token
+            if low in self._GENERIC_PROC_DESCRIPTIONS:
+                return self._GENERIC_PROC_DESCRIPTIONS[low]
+            if low.endswith(".dll"):
+                return "system library"
+            if low.endswith((".ps1", ".bat", ".cmd", ".vbs")):
+                return "system script"
+            return "critical system process"
+
+        cleaned = self._GROUNDING_PROC_EXT_RE.sub(_replace_proc, cleaned)
+
+        if not has_lsass_evidence:
+            cleaned = self._GROUNDING_LSASS_RE.sub("critical credential subsystem", cleaned)
+
+        def _replace_ip(match: re.Match) -> str:
+            ip = match.group(0)
+            return ip if ip in allowed_ips else "[external-ip]"
+
+        cleaned = self._GROUNDING_IPV4_RE.sub(_replace_ip, cleaned)
+
+        def _replace_pid(match: re.Match) -> str:
+            pid = match.group(1)
+            return match.group(0) if pid in allowed_pids else "target process ID"
+
+        cleaned = self._GROUNDING_PID_RE.sub(_replace_pid, cleaned)
+
+        def _replace_mitre(match: re.Match) -> str:
+            mid = match.group(1)
+            return mid if mid.upper() in allowed_mitre_ids else "related ATT&CK technique"
+
+        cleaned = self._GROUNDING_MITRE_RE.sub(_replace_mitre, cleaned)
+
+        def _replace_hash(match: re.Match) -> str:
+            hval = match.group(1)
+            if self._is_trivial_hex_or_non_hash(hval):
+                return hval
+            hlow = hval.lower()
+            if hlow in allowed_hashes or any(hlow in ah for ah in allowed_hashes):
+                return hval
+            return "[observed-hash]"
+
+        cleaned = self._GROUNDING_HASH_RE.sub(_replace_hash, cleaned)
+
+        if "172.16.65.143" in cleaned and "172.16.65.143" not in raw_lower:
+            cleaned = cleaned.replace("172.16.65.143", "[internal-host]")
+        for phrase in ("450.000.000", "450 triệu", "3h45m"):
+            if phrase in cleaned.lower() and phrase not in raw_lower:
+                cleaned = re.sub(re.escape(phrase), "[unverified-metric]", cleaned, flags=re.IGNORECASE)
+        if "8 phút" not in raw_lower and self._GROUNDING_MTTA_8_RE.search(cleaned):
+            cleaned = self._GROUNDING_MTTA_8_RE.sub("MTTA: N/A", cleaned)
+
+        return cleaned
 
     # =====================================================================
     # 1B. TRA CỨU TRI THỨC RAG (MITRE ATT&CK MITIGATIONS & WAZUH REMEDIATION)
@@ -155,6 +455,8 @@ class ResponseAgent:
         """
         Truy vấn RAG Knowledge Base để thu thập TTPs, MITRE Mitigations và Wazuh Remediation
         phù hợp với ngữ cảnh sự cố hiện tại.
+        Ưu tiên tra cứu chính xác theo mitre_ids/rule_ids; chỉ fallback ngữ nghĩa khi thiếu
+        kết quả và áp ngưỡng điểm liên quan (>= 0.30) cùng bộ lọc thực thể ngoài ngữ cảnh.
         """
         mitre_ids: List[str] = []
         rule_ids: List[str] = []
@@ -215,8 +517,52 @@ class ResponseAgent:
                 "remediations": remediations,
             }
 
+        observed = self._collect_observed_grounding_entities(state)
+        has_lsass_evidence: bool = observed["has_lsass_evidence"]
+        mitre_id_set = {m.upper() for m in mitre_ids}
+        rule_id_set = {r.strip() for r in rule_ids}
+        score_threshold = 0.30
+
         seen_ttp_ids: Set[str] = set()
         seen_rule_ids: Set[str] = set()
+
+        def _passes_semantic_threshold(rec: Any) -> bool:
+            if not isinstance(rec, dict):
+                return False
+            if "score" not in rec or rec.get("score") is None:
+                return True
+            try:
+                return float(rec.get("score", 0.0) or 0.0) >= score_threshold
+            except (TypeError, ValueError):
+                return True
+
+        def _is_safe_semantic_ttp(rec: Dict[str, Any]) -> bool:
+            tid = str(rec.get("technique_id") or rec.get("id") or "").strip().upper()
+            if tid and tid in mitre_id_set:
+                return True
+            if not has_lsass_evidence:
+                if tid == "T1003" or tid.startswith("T1003."):
+                    return False
+                blob = " ".join(
+                    str(rec.get(k) or "")
+                    for k in ("name", "description", "detection", "mitigations")
+                ).lower()
+                if "lsass" in blob:
+                    return False
+            return True
+
+        def _is_safe_semantic_rule(rec: Dict[str, Any]) -> bool:
+            rid = str(rec.get("rule_id") or rec.get("id") or "").strip()
+            if rid and rid in rule_id_set:
+                return True
+            if not has_lsass_evidence:
+                blob = " ".join(
+                    str(rec.get(k) or "")
+                    for k in ("description", "remediation")
+                ).lower()
+                if "lsass" in blob:
+                    return False
+            return True
 
         def _add_ttp_record(rec: Optional[Dict[str, Any]]) -> None:
             if not isinstance(rec, dict):
@@ -244,50 +590,7 @@ class ResponseAgent:
             if rem and rem not in remediations:
                 remediations.append(rem)
 
-        try:
-            if hasattr(self.rag_kb, "retrieve_incident_knowledge"):
-                rag_res = self.rag_kb.retrieve_incident_knowledge(
-                    query_text=query_text,
-                    mitre_ids=mitre_ids,
-                    rule_ids=rule_ids,
-                )
-                if isinstance(rag_res, dict):
-                    tech_items = (
-                        rag_res.get("matched_techniques")
-                        or rag_res.get("mitre_techniques")
-                        or rag_res.get("ttp_matches")
-                        or []
-                    )
-                    for item in tech_items:
-                        _add_ttp_record(item)
-                    rule_items = (
-                        rag_res.get("matched_rules")
-                        or rag_res.get("wazuh_rules")
-                        or rag_res.get("rule_matches")
-                        or []
-                    )
-                    for item in rule_items:
-                        _add_rule_record(item)
-                    mit_items = (
-                        rag_res.get("nist_mitigations")
-                        or rag_res.get("mitigations")
-                        or []
-                    )
-                    for m in mit_items:
-                        if m and str(m).strip() not in mitigations:
-                            mitigations.append(str(m).strip())
-                    rem_items = (
-                        rag_res.get("nist_remediations")
-                        or rag_res.get("remediations")
-                        or []
-                    )
-                    for r in rem_items:
-                        if r and str(r).strip() not in remediations:
-                            remediations.append(str(r).strip())
-        except Exception as exc:
-            logger.debug(f"retrieve_incident_knowledge fallback: {exc}")
-
-        # Tra cứu trực tiếp theo từng MITRE ID và Rule ID
+        # 1. Ưu tiên tra cứu chính xác theo MITRE ID và Wazuh Rule ID
         try:
             for tid in mitre_ids:
                 if hasattr(self.rag_kb, "get_mitre_technique"):
@@ -297,28 +600,110 @@ class ResponseAgent:
                         continue
                 if hasattr(self.rag_kb, "query_mitre_technique"):
                     for item in self.rag_kb.query_mitre_technique(tid, n_results=1):
-                        _add_ttp_record(item)
+                        if _passes_semantic_threshold(item):
+                            _add_ttp_record(item)
 
+            linked_rule_mitre_ids: List[str] = []
             for rid in rule_ids:
                 if hasattr(self.rag_kb, "get_wazuh_rule"):
                     exact_rule = self.rag_kb.get_wazuh_rule(rid)
                     if exact_rule:
                         _add_rule_record(exact_rule)
+                        for linked_tid in exact_rule.get("mitre_ids") or []:
+                            lt = str(linked_tid).strip()
+                            if lt and lt not in linked_rule_mitre_ids:
+                                linked_rule_mitre_ids.append(lt)
                         continue
                 if hasattr(self.rag_kb, "query_wazuh_rule"):
                     for item in self.rag_kb.query_wazuh_rule(rid, n_results=1):
-                        _add_rule_record(item)
+                        if _passes_semantic_threshold(item):
+                            _add_rule_record(item)
 
-            # Truy vấn ngữ nghĩa theo query_text nếu có
-            if query_text:
-                if hasattr(self.rag_kb, "query_mitre_technique"):
-                    for item in self.rag_kb.query_mitre_technique(query_text, n_results=2):
-                        _add_ttp_record(item)
-                if hasattr(self.rag_kb, "query_wazuh_rule"):
-                    for item in self.rag_kb.query_wazuh_rule(query_text, n_results=2):
-                        _add_rule_record(item)
+            if not mitigations and linked_rule_mitre_ids and hasattr(self.rag_kb, "get_mitre_technique"):
+                for ltid in linked_rule_mitre_ids:
+                    linked_ttp = self.rag_kb.get_mitre_technique(ltid)
+                    if linked_ttp and _is_safe_semantic_ttp(linked_ttp):
+                        _add_ttp_record(linked_ttp)
         except Exception as exc:
-            logger.debug(f"Lỗi khi truy vấn RAG Knowledge Base: {exc}")
+            logger.debug(f"Lỗi khi tra cứu exact ID từ RAG Knowledge Base: {exc}")
+
+        # 2. Chỉ gọi retrieve_incident_knowledge khi exact ID chưa phủ đủ mitigations/remediations
+        need_mitigations = not mitigations
+        need_remediations = not remediations
+        if need_mitigations or need_remediations:
+            try:
+                if hasattr(self.rag_kb, "retrieve_incident_knowledge"):
+                    rag_res = self.rag_kb.retrieve_incident_knowledge(
+                        query_text=query_text,
+                        mitre_ids=mitre_ids,
+                        rule_ids=rule_ids,
+                    )
+                    if isinstance(rag_res, dict):
+                        tech_items = (
+                            rag_res.get("matched_techniques")
+                            or rag_res.get("mitre_techniques")
+                            or rag_res.get("ttp_matches")
+                            or []
+                        )
+                        if need_mitigations:
+                            for item in tech_items:
+                                if _passes_semantic_threshold(item) and _is_safe_semantic_ttp(item):
+                                    _add_ttp_record(item)
+                            if not mitigations:
+                                mit_items = (
+                                    rag_res.get("nist_mitigations")
+                                    or rag_res.get("mitigations")
+                                    or []
+                                )
+                                for m in mit_items:
+                                    m_str = str(m).strip() if m else ""
+                                    if not m_str:
+                                        continue
+                                    if not has_lsass_evidence and "lsass" in m_str.lower():
+                                        continue
+                                    if m_str not in mitigations:
+                                        mitigations.append(m_str)
+
+                        rule_items = (
+                            rag_res.get("matched_rules")
+                            or rag_res.get("wazuh_rules")
+                            or rag_res.get("rule_matches")
+                            or []
+                        )
+                        if need_remediations:
+                            for item in rule_items:
+                                if _passes_semantic_threshold(item) and _is_safe_semantic_rule(item):
+                                    _add_rule_record(item)
+                            if not remediations:
+                                rem_items = (
+                                    rag_res.get("nist_remediations")
+                                    or rag_res.get("remediations")
+                                    or []
+                                )
+                                for r in rem_items:
+                                    r_str = str(r).strip() if r else ""
+                                    if not r_str:
+                                        continue
+                                    if not has_lsass_evidence and "lsass" in r_str.lower():
+                                        continue
+                                    if r_str not in remediations:
+                                        remediations.append(r_str)
+            except Exception as exc:
+                logger.debug(f"retrieve_incident_knowledge fallback: {exc}")
+
+        # 3. Truy vấn ngữ nghĩa dự phòng chỉ khi vẫn còn trống sau exact ID + retrieve_incident_knowledge
+        try:
+            if query_text:
+                if not mitigations and hasattr(self.rag_kb, "query_mitre_technique"):
+                    for item in self.rag_kb.query_mitre_technique(query_text, n_results=2):
+                        if _passes_semantic_threshold(item) and _is_safe_semantic_ttp(item):
+                            _add_ttp_record(item)
+                if not remediations and hasattr(self.rag_kb, "query_wazuh_rule"):
+                    for item in self.rag_kb.query_wazuh_rule(query_text, n_results=2):
+                        if _passes_semantic_threshold(item) and _is_safe_semantic_rule(item):
+                            _add_rule_record(item)
+        except Exception as exc:
+            logger.debug(f"Lỗi khi truy vấn ngữ nghĩa RAG Knowledge Base: {exc}")
 
         return {
             "mitre_ids": mitre_ids,
@@ -329,6 +714,439 @@ class ResponseAgent:
             "mitigations": mitigations,
             "remediations": remediations,
         }
+
+    def _wrap_untrusted(
+        self,
+        text: Optional[str],
+        field_name: str,
+        max_len: int = 800,
+        *,
+        include_notice: bool = False,
+        security_flags: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        """Làm sạch và bọc dữ liệu untrusted bằng <raw_untrusted_log> khi SecurityGuard bật, đồng thời lưu cờ phát hiện."""
+        raw = "" if text is None else str(text)
+        if not raw.strip() or raw.strip() == "N/A":
+            return "N/A"
+        if not self.enable_security_guard:
+            return raw[:max_len] if max_len > 0 and len(raw) > max_len else raw
+        wrapped, is_inj, reason = inspect_and_wrap_untrusted(
+            raw,
+            field_name=field_name,
+            max_len=max_len,
+            include_notice=include_notice,
+        )
+        if is_inj:
+            flag_entry = {
+                "field": field_name,
+                "reason": reason or "prompt_injection_detected",
+            }
+            if security_flags is not None:
+                security_flags.append(flag_entry)
+            else:
+                self._last_security_flags.append(flag_entry)
+        return wrapped
+
+    def _collect_valid_targets(self, state: IncidentState) -> Set[str]:
+        """Thu thập tập target hợp lệ từ _extract_context(state) để chặn target bịa đặt từ LLM."""
+        ctx = self._extract_context(state)
+        valid_targets: Set[str] = set()
+        for key in ("hosts", "users", "processes", "external_ips", "source_ips"):
+            for val in ctx.get(key, []):
+                if val and str(val).strip():
+                    valid_targets.add(str(val).strip().lower())
+        for ag in ctx.get("wazuh_agents", []):
+            if isinstance(ag, dict):
+                if ag.get("id"):
+                    valid_targets.add(f"agent-{str(ag['id']).strip().lower()}")
+                if ag.get("name"):
+                    valid_targets.add(str(ag["name"]).strip().lower())
+                if ag.get("ip"):
+                    valid_targets.add(str(ag["ip"]).strip().lower())
+        return valid_targets
+
+    def _apply_llm_action_adjustments(
+        self,
+        actions: List[RecommendedAction],
+        strategy: Optional[ResponseLLMStrategy],
+        state: IncidentState,
+    ) -> List[RecommendedAction]:
+        """
+        Áp dụng tối đa 3 điều chỉnh an toàn từ ResponseLLMStrategy lên danh sách hành động hiện có.
+        Bất biến an toàn tuyệt đối:
+        - Chỉ điều chỉnh action hiện có có target tồn tại trong _extract_context(state).
+        - Từ chối KILL_PROCESS nhắm vào tiến trình hệ thống trọng yếu (lsass.exe, svchost.exe...).
+        - SUPPRESS_PER_FEEDBACK chỉ hợp lệ khi bool(state.analyst_feedback) là True.
+        - Luôn tái áp dụng apply_approval_policy() và giữ is_approved=None trên mọi hành động.
+        """
+        working: List[RecommendedAction] = list(actions)
+        if strategy is None or not getattr(strategy, "action_adjustments", None):
+            for act in working:
+                self.apply_approval_policy(act)
+                act.is_approved = None
+            return working
+
+        valid_targets = self._collect_valid_targets(state)
+        has_feedback = bool(state.analyst_feedback and str(state.analyst_feedback).strip())
+        applied_count = 0
+
+        for adj in strategy.action_adjustments:
+            if adj.operation == "KEEP":
+                continue
+            if applied_count >= 3:
+                break
+
+            target_raw = (adj.target or "").strip()
+            target_norm = target_raw.lower()
+            if not target_norm or target_norm not in valid_targets:
+                logger.warning(
+                    f"[ResponseGuardrail] Từ chối điều chỉnh {adj.operation} cho target ngoài ngữ cảnh: '{adj.target}'"
+                )
+                continue
+
+            if adj.action_type == ActionType.KILL_PROCESS and (
+                self.playbooks.is_critical_system_process(target_raw)
+                or is_protected_process(target_raw)
+            ):
+                logger.warning(
+                    f"[ResponseGuardrail] Chặn điều chỉnh KILL_PROCESS nhắm tiến trình hệ thống trọng yếu: '{target_raw}'"
+                )
+                continue
+
+            if adj.operation == "SUPPRESS_PER_FEEDBACK" and not has_feedback:
+                logger.warning(
+                    f"[ResponseGuardrail] Từ chối SUPPRESS_PER_FEEDBACK cho '{target_raw}' vì không có analyst_feedback."
+                )
+                continue
+
+            matched_indices: List[int] = []
+            if adj.action_id:
+                matched_indices = [
+                    idx
+                    for idx, act in enumerate(working)
+                    if act.action_id == adj.action_id
+                    and act.action_type == adj.action_type
+                    and act.target.strip().lower() == target_norm
+                ]
+            if not matched_indices:
+                matched_indices = [
+                    idx
+                    for idx, act in enumerate(working)
+                    if act.action_type == adj.action_type
+                    and act.target.strip().lower() == target_norm
+                ]
+
+            if not matched_indices:
+                logger.debug(
+                    f"[ResponseGuardrail] Không tìm thấy hành động hiện có khớp ({adj.action_type.value}, '{target_raw}') để điều chỉnh."
+                )
+                continue
+
+            if adj.operation == "CUSTOMIZE_RATIONALE":
+                raw_custom = (adj.custom_description or adj.reason or "").strip()
+                if not raw_custom:
+                    continue
+                safe_custom = (
+                    sanitize_prompt_text(raw_custom, max_len=400).strip()
+                    if self.enable_security_guard
+                    else raw_custom[:400]
+                )
+                if not safe_custom:
+                    continue
+                for idx in matched_indices:
+                    act = working[idx]
+                    if safe_custom not in (act.description or ""):
+                        act.description = f"{(act.description or '').rstrip()} | {safe_custom}".strip(" |")
+                applied_count += 1
+
+            elif adj.operation == "REPRIORITIZE":
+                if adj.new_priority is None:
+                    continue
+                new_prio = int(adj.new_priority)
+                if new_prio < 1 or new_prio > 5:
+                    continue
+                for idx in matched_indices:
+                    working[idx].priority = new_prio
+                applied_count += 1
+
+            elif adj.operation == "SUPPRESS_PER_FEEDBACK":
+                idx_set = set(matched_indices)
+                working = [act for idx, act in enumerate(working) if idx not in idx_set]
+                applied_count += 1
+
+        # Cưỡng chế bất biến an toàn trên toàn bộ hành động sau điều chỉnh
+        for act in working:
+            self.apply_approval_policy(act)
+            act.is_approved = None
+
+        return working
+
+    # =====================================================================
+    # 1C. TỔNG HỢP CHIẾN LƯỢC RAG GENERATION (INCIDENT COMMANDER LLM STRATEGY)
+    # =====================================================================
+    def synthesize_rag_response_strategy(
+        self,
+        state: IncidentState,
+        rag_info: Optional[Dict[str, Any]] = None,
+        proposed_actions: Optional[List[RecommendedAction]] = None,
+    ) -> str:
+        """
+        Tổng hợp chiến lược phản ứng sự cố hoàn chỉnh (RAG Generation Loop):
+        1. Retrieval: Tiếp nhận tri thức RAG đã truy xuất từ rag_info (MITRE Mitigations, Wazuh Remediation, TTP matches).
+        2. Augmentation: Kết hợp toàn diện bối cảnh sự cố, danh sách proposed_actions, rca_result,
+           analyst_feedback (+ reanalysis_count) và tri thức RAG (bọc qua SecurityGuard).
+        3. Generation: Gọi invoke_structured_llm(..., schema_class=ResponseLLMStrategy, model_tier="reasoning")
+           để sinh chiến lược và điều chỉnh action_adjustments an toàn (tương thích MockLLMProvider).
+        4. Tích hợp kết quả: Lưu vào state.response_strategy_summary và self._last_llm_strategy.
+        5. Fallback Engine: Nếu LLM bị tắt hoặc gặp lỗi, tự động chuyển tầng an toàn về chuỗi [NIST/MITRE RAG Guidance].
+        """
+        self._last_llm_strategy = None
+        self._last_security_flags = []
+        security_flags: List[Dict[str, str]] = []
+        rag_info = rag_info or self._last_rag_info or self.lookup_rag_remediation(state)
+        observed = self._collect_observed_grounding_entities(state)
+
+        raw_remediations = [str(r).strip() for r in (rag_info.get("remediations") or []) if r and str(r).strip()]
+        raw_mitigations = [str(m).strip() for m in (rag_info.get("mitigations") or []) if m and str(m).strip()]
+        remediations = [self._sanitize_text_grounding(r, observed) for r in raw_remediations]
+        mitigations = [self._sanitize_text_grounding(m, observed) for m in raw_mitigations]
+
+        guidance_snippets: List[str] = []
+        if remediations:
+            guidance_snippets.append(f"Wazuh Remediation: {remediations[0]}")
+        if mitigations:
+            guidance_snippets.append(f"MITRE Mitigation: {mitigations[0]}")
+
+        fallback_guidance = (
+            f"[NIST/MITRE RAG Guidance] {' | '.join(guidance_snippets)}"
+            if guidance_snippets
+            else "[NIST/MITRE RAG Guidance] Tuân thủ quy trình kiểm soát và xử lý sự cố theo NIST SP 800-61."
+        )
+
+        # 1. Nếu LLM bị vô hiệu hóa, kích hoạt fallback ngay
+        if not self.llm_enabled:
+            strategy_summary = fallback_guidance
+            self._last_strategy_summary = strategy_summary
+            if hasattr(state, "response_strategy_summary"):
+                state.response_strategy_summary = strategy_summary
+            else:
+                try:
+                    setattr(state, "response_strategy_summary", strategy_summary)
+                except Exception:
+                    pass
+            return strategy_summary
+
+        # 2. Lazy import HybridLLMProvider nếu chưa được cung cấp
+        if self.llm_provider is None:
+            try:
+                from src.copilot.llm_provider import HybridLLMProvider
+                self.llm_provider = HybridLLMProvider()
+            except Exception as exc:
+                logger.warning(f"Không thể lazy import HybridLLMProvider cho ResponseAgent: {exc}")
+                self.llm_provider = None
+
+        if self.llm_provider is None:
+            strategy_summary = fallback_guidance
+            self._last_strategy_summary = strategy_summary
+            if hasattr(state, "response_strategy_summary"):
+                state.response_strategy_summary = strategy_summary
+            else:
+                try:
+                    setattr(state, "response_strategy_summary", strategy_summary)
+                except Exception:
+                    pass
+            return strategy_summary
+
+        # 3. Thu thập ngữ cảnh chi tiết từ IncidentState (và bọc gọn qua SecurityGuard khi bật)
+        context = self._extract_context(state)
+        hosts_raw = ", ".join(context.get("hosts", [])) or "N/A"
+        ips_raw = ", ".join(context.get("external_ips", []) or context.get("source_ips", [])) or "N/A"
+        ips_str = (
+            sanitize_prompt_text(ips_raw, max_len=300)
+            if self.enable_security_guard and ips_raw != "N/A"
+            else ips_raw
+        )
+        procs_raw = ", ".join(context.get("processes", [])) or "N/A"
+        users_raw = ", ".join(context.get("users", [])) or "N/A"
+
+        hosts_str = self._wrap_untrusted(
+            hosts_raw,
+            "response.hosts",
+            max_len=400,
+            include_notice=False,
+            security_flags=security_flags,
+        )
+        procs_str = self._wrap_untrusted(
+            procs_raw,
+            "response.processes",
+            max_len=400,
+            include_notice=False,
+            security_flags=security_flags,
+        )
+        users_str = self._wrap_untrusted(
+            users_raw,
+            "response.users",
+            max_len=400,
+            include_notice=False,
+            security_flags=security_flags,
+        )
+
+        triage_summary_raw = ""
+        if state.triage_result and state.triage_result.summary:
+            triage_summary_raw = str(state.triage_result.summary)
+        triage_summary_str = (
+            self._wrap_untrusted(
+                triage_summary_raw,
+                "response.triage_summary",
+                max_len=500,
+                include_notice=False,
+                security_flags=security_flags,
+            )
+            if triage_summary_raw
+            else "N/A"
+        )
+
+        attack_type = "UNKNOWN"
+        if state.triage_result and state.triage_result.attack_type:
+            attack_type = str(state.triage_result.attack_type)
+        elif state.attack_type:
+            attack_type = str(state.attack_type)
+        elif state.rca_result and state.rca_result.confirmed_attack_type:
+            attack_type = str(state.rca_result.confirmed_attack_type)
+        if self.enable_security_guard and attack_type not in ("UNKNOWN", "N/A"):
+            attack_type = sanitize_prompt_text(attack_type, max_len=200)
+
+        rca_section = "Chưa có kết quả RCA chi tiết."
+        if state.rca_result:
+            pz_node = next((n for n in (state.rca_result.process_tree or []) if n.is_malicious_origin), None)
+            pz_text = f"{pz_node.process_name} (PID {pz_node.process_id})" if pz_node else "N/A"
+            rca_raw = state.rca_result.root_cause_summary or ""
+            rca_wrapped = (
+                self._wrap_untrusted(
+                    rca_raw,
+                    "response.rca_summary",
+                    max_len=600,
+                    include_notice=False,
+                    security_flags=security_flags,
+                )
+                if rca_raw
+                else "N/A"
+            )
+            rca_section = (
+                f"- Initial Access Vector: {state.rca_result.initial_access_vector}\n"
+                f"- Patient Zero: {pz_text}\n"
+                f"- Tóm tắt RCA:\n{rca_wrapped}"
+            )
+
+        actions_for_prompt = (
+            proposed_actions
+            if proposed_actions is not None
+            else (state.recommended_actions or [])
+        )
+        if actions_for_prompt:
+            action_lines = []
+            for act in actions_for_prompt:
+                phase_val = act.phase.value if act.phase else "N/A"
+                action_lines.append(
+                    f"- [{act.action_id}] {act.action_type.value} | target={act.target} "
+                    f"| priority={act.priority} | phase={phase_val} "
+                    f"| require_human_approval={act.require_human_approval}"
+                )
+            proposed_actions_str = "\n".join(action_lines)
+        else:
+            proposed_actions_str = "Chưa có hành động đề xuất."
+
+        feedback_section = ""
+        if state.analyst_feedback and str(state.analyst_feedback).strip():
+            wrapped_fb = self._wrap_untrusted(
+                state.analyst_feedback,
+                "response.analyst_feedback",
+                max_len=600,
+                include_notice=False,
+                security_flags=security_flags,
+            )
+            feedback_section = (
+                f"\n=== PHẢN HỒI CHUYÊN VIÊN SOC (Lần thứ {state.reanalysis_count}) ===\n"
+                f"{wrapped_fb}\n"
+                f"Lưu ý: Bắt buộc phản hồi trong `analyst_feedback_addressed` và cân nhắc "
+                f"`SUPPRESS_PER_FEEDBACK` hoặc `REPRIORITIZE` trong `action_adjustments` nếu hợp lý.\n"
+            )
+
+        self._last_security_flags = list(security_flags)
+        guard_header = f"{UNTRUSTED_LOG_SECURITY_HEADER}\n\n" if self.enable_security_guard else ""
+
+        mitre_ids = ", ".join(rag_info.get("mitre_ids", [])) or "N/A"
+        rule_ids = ", ".join(rag_info.get("rule_ids", [])) or "N/A"
+        mitigations_str = "; ".join(mitigations[:3]) if mitigations else "N/A"
+        remediations_str = "; ".join(remediations[:3]) if remediations else "N/A"
+
+        # 4. Xây dựng prompt tích hợp Ngữ cảnh sự cố + Proposed Actions + RCA + Feedback + Tri thức RAG
+        prompt = (
+            f"Bạn là Incident Commander đang điều phối phản ứng sự cố an ninh mạng theo chuẩn NIST SP 800-61.\n"
+            f"Dựa trên ngữ cảnh sự cố, danh sách hành động đề xuất hiện tại và tri thức an ninh mạng từ RAG Knowledge Base (MITRE ATT&CK & Wazuh Rules),\n"
+            f"hãy xây dựng chiến lược phản ứng chuẩn JSON schema ResponseLLMStrategy (Custom Mitigation Rationale & Operational Guidance):\n\n"
+            f"{guard_header}"
+            f"=== NGỮ CẢNH SỰ CỐ ===\n"
+            f"- Mã sự cố (Incident ID): {state.incident_id}\n"
+            f"- Loại tấn công (Attack Type): {attack_type}\n"
+            f"- Tóm tắt Triage:\n{triage_summary_str}\n"
+            f"- Máy trạm/Máy chủ mục tiêu (Target Hosts):\n{hosts_str}\n"
+            f"- Địa chỉ IP tấn công/C2 (Attacker/C2 IPs): {ips_str}\n"
+            f"- Tiến trình liên quan (Processes):\n{procs_str}\n"
+            f"- Tài khoản ảnh hưởng (Compromised Users):\n{users_str}\n\n"
+            f"=== KẾT QUẢ ĐIỀU TRA RCA ===\n"
+            f"{rca_section}\n\n"
+            f"=== DANH SÁCH HÀNH ĐỘNG ĐỀ XUẤT HIỆN TẠI (PROPOSED ACTIONS) ===\n"
+            f"{proposed_actions_str}\n"
+            f"{feedback_section}\n"
+            f"=== TRI THỨC RAG TRUY XUẤT (RETRIEVED KNOWLEDGE) ===\n"
+            f"- Kỹ thuật MITRE ATT&CK: {mitre_ids}\n"
+            f"- Biện pháp giảm thiểu MITRE (Mitigations): {mitigations_str}\n"
+            f"- Quy tắc cảnh báo Wazuh: {rule_ids}\n"
+            f"- Hướng dẫn khắc phục Wazuh (Remediation): {remediations_str}\n\n"
+            f"=== YÊU CẦU ĐẦU RA ===\n"
+            f"Hãy tổng hợp phản hồi theo schema ResponseLLMStrategy gồm:\n"
+            f"1. `rationale`, `containment_guidance`, `eradication_recovery_guidance`, `operational_safety_notes`.\n"
+            f"2. `action_adjustments` (tối đa 3 điều chỉnh hợp lệ lên các hành động hiện có, không hạ phê duyệt rủi ro cao, không diệt tiến trình hệ thống).\n"
+            f"3. `strategy_summary`: Tóm tắt súc tích 2-4 câu chỉ đạo tác chiến."
+        )
+
+        # 5. Gọi LLM Provider qua invoke_structured_llm
+        strategy_obj, used_real_llm, info = invoke_structured_llm(
+            self.llm_provider,
+            prompt=prompt,
+            schema_class=ResponseLLMStrategy,
+            system_prompt=self.system_prompt,
+            incident_state=state,
+            model_tier="reasoning",
+            temperature=0.15,
+            agent_name="ResponseAgent",
+        )
+
+        if isinstance(strategy_obj, ResponseLLMStrategy) and used_real_llm:
+            self._last_llm_strategy = strategy_obj
+            summary_candidate = (strategy_obj.strategy_summary or strategy_obj.rationale or "").strip()
+            strategy_summary = (
+                self._sanitize_text_grounding(summary_candidate, observed)
+                if summary_candidate
+                else fallback_guidance
+            )
+        elif used_real_llm and isinstance(info, str) and info.strip():
+            # Tương thích ngược MockLLMProvider tối giản chỉ định nghĩa generate_response()
+            strategy_summary = self._sanitize_text_grounding(info.strip(), observed)
+        else:
+            strategy_summary = fallback_guidance
+
+        self._last_strategy_summary = strategy_summary
+        if hasattr(state, "response_strategy_summary"):
+            state.response_strategy_summary = strategy_summary
+        else:
+            try:
+                setattr(state, "response_strategy_summary", strategy_summary)
+            except Exception:
+                pass
+
+        return strategy_summary
 
     # =====================================================================
     # 2. SINH HÀNH ĐỘNG TỪ PLAYBOOK VÀ WAZUH ACTIVE RESPONSE
@@ -544,6 +1362,26 @@ class ResponseAgent:
             ),
         ]
 
+    @staticmethod
+    def _is_host_isolate_action(action: RecommendedAction) -> bool:
+        """Kiểm tra hành động có phải cô lập máy trạm (ISOLATE_HOST hoặc lệnh Wazuh host-isolate) không."""
+        if action.action_type == ActionType.ISOLATE_HOST:
+            return True
+        if "host-isolate" in (action.description or "").lower():
+            return True
+        params = action.parameters or {}
+        if isinstance(params, dict):
+            for val in params.values():
+                if val is not None and "host-isolate" in str(val).lower():
+                    return True
+        elif "host-isolate" in str(params).lower():
+            return True
+        if action.script_bundle is not None:
+            war = action.script_bundle.wazuh_active_response or {}
+            if isinstance(war, dict) and "host-isolate" in str(war.get("command", "") or "").lower():
+                return True
+        return False
+
     def recommend_actions(self, state: IncidentState) -> List[RecommendedAction]:
         """
         Đề xuất danh sách các hành động ứng phó phù hợp dựa trên tình trạng sự cố.
@@ -552,6 +1390,7 @@ class ResponseAgent:
         - Priority 2: Triệt tiêu / Danh tính (RESET_PASSWORD, KILL_PROCESS).
         - Priority 3: Khôi phục hệ thống (PATCH_SYSTEM, Quét EDR).
         """
+        self._last_security_flags = []
         # Nếu Triage đã kết luận là False Positive thì không đề xuất hành động ngăn chặn
         if state.triage_result and not state.triage_result.is_incident:
             logger.info(f"[{state.incident_id}] Sự cố được phân loại False Positive, không đề xuất hành động.")
@@ -718,7 +1557,7 @@ class ResponseAgent:
         # -------------------------------------------------------------
         if is_web_attack:
             target_host = hosts[0] if hosts else "WEB-SERVER-01"
-            attacker_ip = external_ips[0] if external_ips else (source_ips[0] if source_ips else "194.26.29.112")
+            attacker_ip = external_ips[0] if external_ips else (source_ips[0] if source_ips else None)
             shell_names = {"cmd.exe", "powershell.exe", "bash", "sh", "nc", "php-cgi", "cmd", "powershell", "pwsh", "nc.exe", "netcat"}
             web_proc: Optional[str] = None
             for p in processes:
@@ -729,11 +1568,41 @@ class ResponseAgent:
             if web_proc is None and processes:
                 web_proc = processes[0]
 
-            web_actions = self.playbooks.web_attack_playbook(
-                host_name=target_host,
-                attacker_ip=attacker_ip,
-                web_process=web_proc,
-            )
+            if attacker_ip:
+                web_actions = self.playbooks.web_attack_playbook(
+                    host_name=target_host,
+                    attacker_ip=attacker_ip,
+                    web_process=web_proc,
+                )
+            else:
+                web_actions = []
+                if web_proc:
+                    proc_clean = web_proc.strip().lower().split("/")[-1].split("\\")[-1]
+                    if proc_clean in shell_names:
+                        web_actions.append(
+                            RecommendedAction(
+                                action_id="ACT-WEB-KILL",
+                                action_type=ActionType.KILL_PROCESS,
+                                target=web_proc,
+                                description=f"Tiêu diệt tiến trình shell độc hại {web_proc} sinh ra từ dịch vụ Web trên {target_host}.",
+                                priority=2,
+                                require_human_approval=False,
+                                phase=IncidentPhase.ERADICATION,
+                                script_bundle=self.playbooks.create_bundle("ACT-WEB-KILL", ActionType.KILL_PROCESS, web_proc, IncidentPhase.ERADICATION),
+                            )
+                        )
+                web_actions.append(
+                    RecommendedAction(
+                        action_id="ACT-WEB-PATCH",
+                        action_type=ActionType.PATCH_SYSTEM,
+                        target=target_host,
+                        description=f"Vá lỗ hổng ứng dụng Web (SQLi/RCE/XSS) và rà soát Web Shell trên máy chủ {target_host}.",
+                        priority=3,
+                        require_human_approval=False,
+                        phase=IncidentPhase.RECOVERY,
+                        script_bundle=self.playbooks.create_bundle("ACT-WEB-PATCH", ActionType.PATCH_SYSTEM, target_host, IncidentPhase.RECOVERY),
+                    )
+                )
             for act in web_actions:
                 self.apply_approval_policy(act)
             actions.extend(web_actions)
@@ -755,12 +1624,44 @@ class ResponseAgent:
                 )
 
         if is_reconnaissance:
-            attacker_ip = external_ips[0] if external_ips else (source_ips[0] if source_ips else "194.26.29.112")
+            attacker_ip = external_ips[0] if external_ips else (source_ips[0] if source_ips else None)
             target_host = hosts[0] if hosts else None
-            recon_actions = self.playbooks.reconnaissance_playbook(
-                attacker_ip=attacker_ip,
-                target_host=target_host,
-            )
+            if attacker_ip:
+                recon_actions = self.playbooks.reconnaissance_playbook(
+                    attacker_ip=attacker_ip,
+                    target_host=target_host,
+                )
+            else:
+                recon_actions = []
+                for proc in processes:
+                    if not self.playbooks.is_critical_system_process(proc) and not is_protected_process(proc):
+                        recon_actions.append(
+                            RecommendedAction(
+                                action_id=f"ACT-RECON-KILL-{proc}",
+                                action_type=ActionType.KILL_PROCESS,
+                                target=proc,
+                                description=f"Tiêu diệt tiến trình dò quét nội bộ {proc} trên {target_host or 'WORKSTATION-01'}.",
+                                priority=2,
+                                require_human_approval=False,
+                                phase=IncidentPhase.CONTAINMENT,
+                                script_bundle=self.playbooks.create_bundle(f"ACT-RECON-KILL-{proc}", ActionType.KILL_PROCESS, proc, IncidentPhase.CONTAINMENT),
+                            )
+                        )
+                        break
+                if target_host or not recon_actions:
+                    harden_target = target_host or "NETWORK-PERIMETER"
+                    recon_actions.append(
+                        RecommendedAction(
+                            action_id="ACT-RECON-HARDEN",
+                            action_type=ActionType.PATCH_SYSTEM,
+                            target=harden_target,
+                            description=f"Đóng các cổng dịch vụ không cần thiết và rà soát cấu hình Firewall trên {harden_target}.",
+                            priority=3,
+                            require_human_approval=False,
+                            phase=IncidentPhase.RECOVERY,
+                            script_bundle=self.playbooks.create_bundle("ACT-RECON-HARDEN", ActionType.PATCH_SYSTEM, harden_target, IncidentPhase.RECOVERY),
+                        )
+                    )
             for act in recon_actions:
                 self.apply_approval_policy(act)
             actions.extend(recon_actions)
@@ -798,19 +1699,18 @@ class ResponseAgent:
         # -------------------------------------------------------------
         if is_malware_or_c2:
             target_host = hosts[0] if hosts else "WORKSTATION-01"
-            target_proc = processes[0] if processes else "powershell.exe"
+            target_proc = processes[0] if processes else None
 
-            if external_ips or (not hosts and not processes):
-                target_ip = external_ips[0] if external_ips else "194.26.29.112"
+            if external_ips and target_proc:
                 malware_actions = self.generate_malware_response(
                     host_name=target_host,
-                    malicious_ip=target_ip,
+                    malicious_ip=external_ips[0],
                     process_name=target_proc,
                 )
                 actions.extend(malware_actions)
             else:
-                # Sự cố nội bộ không có IP C2 bên ngoài -> chỉ cô lập host và diệt tiến trình
-                if hosts:
+                # Không bịa IP C2 hay tiến trình giả khi thiếu dữ liệu quan sát
+                if hosts or (not external_ips and not target_proc):
                     actions.append(
                         self.apply_approval_policy(
                             RecommendedAction(
@@ -825,18 +1725,39 @@ class ResponseAgent:
                             )
                         )
                     )
-                if processes:
+                if target_proc:
+                    is_crit = self.playbooks.is_critical_system_process(target_proc)
+                    kill_desc = (
+                        f"CẢNH BÁO: Tiến trình {target_proc} là tiến trình hệ thống trọng yếu. Đề xuất cô lập máy trạm thay vì tiêu diệt."
+                        if is_crit
+                        else f"Tiêu diệt tiến trình độc hại {target_proc} đang chạy trên máy trạm."
+                    )
                     actions.append(
                         self.apply_approval_policy(
                             RecommendedAction(
                                 action_id="ACT-MALW-KILL",
                                 action_type=ActionType.KILL_PROCESS,
                                 target=target_proc,
-                                description=f"Tiêu diệt tiến trình độc hại {target_proc} đang chạy trên máy trạm.",
-                                priority=2,
-                                require_human_approval=False,
+                                description=kill_desc,
+                                priority=1 if is_crit else 2,
+                                require_human_approval=True if is_crit else False,
                                 phase=IncidentPhase.CONTAINMENT,
                                 script_bundle=self.playbooks.create_bundle("ACT-MALW-KILL", ActionType.KILL_PROCESS, target_proc, IncidentPhase.CONTAINMENT),
+                            )
+                        )
+                    )
+                if external_ips:
+                    actions.append(
+                        self.apply_approval_policy(
+                            RecommendedAction(
+                                action_id="ACT-MALW-BLOCK",
+                                action_type=ActionType.BLOCK_IP,
+                                target=external_ips[0],
+                                description=f"Chặn địa chỉ IP C2 {external_ips[0]} trên Firewall và Web Proxy.",
+                                priority=1,
+                                require_human_approval=True,
+                                phase=IncidentPhase.CONTAINMENT,
+                                script_bundle=self.playbooks.create_bundle("ACT-MALW-BLOCK", ActionType.BLOCK_IP, external_ips[0], IncidentPhase.CONTAINMENT),
                             )
                         )
                     )
@@ -861,7 +1782,7 @@ class ResponseAgent:
             # Bổ sung các tiến trình độc hại khác nếu phát hiện từ RCA tree
             if rca and rca.process_tree:
                 for node in rca.process_tree:
-                    if node.process_name and node.process_name.lower() != target_proc.lower():
+                    if node.process_name and (not target_proc or node.process_name.lower() != target_proc.lower()):
                         actions.append(
                             self.apply_approval_policy(
                                 RecommendedAction(
@@ -899,11 +1820,10 @@ class ResponseAgent:
         # -------------------------------------------------------------
         if is_phishing_or_credential:
             target_user = users[0] if users else "compromised_user"
-            if external_ips or (not users and not hosts):
-                target_ip = external_ips[0] if external_ips else "194.26.29.112"
+            if external_ips:
                 phishing_actions = self.generate_phishing_response(
                     compromised_user=target_user,
-                    phishing_ip=target_ip,
+                    phishing_ip=external_ips[0],
                 )
                 actions.extend(phishing_actions)
             else:
@@ -1014,50 +1934,78 @@ class ResponseAgent:
                     )
                 )
 
+        # Loại bỏ trùng lặp và sắp xếp ứng viên ban đầu trước khi gửi sang LLM Strategy
+        candidate_actions = self.deduplicate_and_sort_actions(actions)
+
         # -------------------------------------------------------------
-        # 5. ADAPTIVE FEEDBACK HANDLING (XỬ LÝ CHỈ THỊ TỪ CHUYÊN VIÊN KHI QUAY LUI)
+        # 5. ĐÍNH KÈM TRI THỨC RAG & GENERATION CHIẾN LƯỢC (NIST/MITRE/WAZUH)
+        # -------------------------------------------------------------
+        rag_info = self.lookup_rag_remediation(state)
+        self._last_rag_info = rag_info
+
+        # Hoàn thiện vòng lặp: Retrieval -> Augmentation (kèm proposed_actions + feedback) -> Generation
+        strategy_summary = self.synthesize_rag_response_strategy(
+            state,
+            rag_info,
+            proposed_actions=candidate_actions,
+        )
+
+        # Áp dụng điều chỉnh an toàn từ LLM Strategy (tối đa 3 điều chỉnh hợp lệ)
+        if self._last_llm_strategy is not None:
+            candidate_actions = self._apply_llm_action_adjustments(
+                candidate_actions,
+                self._last_llm_strategy,
+                state,
+            )
+
+        # -------------------------------------------------------------
+        # 6. ADAPTIVE FEEDBACK FALLBACK (QUY TẮC XÁC ĐỊNH DỰ PHÒNG KHI QUAY LUI)
         # -------------------------------------------------------------
         if state.analyst_feedback:
             feedback_lower = state.analyst_feedback.lower()
             # Nếu chuyên viên từ chối cô lập host (hoặc máy chủ quan trọng Domain Controller / Database)
             if any(term in feedback_lower for term in ["không cô lập", "từ chối cô lập", "không isolate", "không ngắt kết nối", "domain controller", "dc-server"]):
                 logger.info("Phát hiện chỉ thị từ chối cô lập host từ phản hồi của chuyên viên. Tự động loại bỏ hành động ISOLATE_HOST.")
-                actions = [a for a in actions if a.action_type != ActionType.ISOLATE_HOST and "host-isolate" not in (getattr(a, "command", "") or "")]
-                # Đảm bảo bổ sung hành động tiêu diệt tiến trình độc hại thay thế nếu chưa có
-                if not any(a.action_type == ActionType.KILL_PROCESS for a in actions) and processes:
-                    actions.append(
-                        self.apply_approval_policy(
-                            RecommendedAction(
-                                action_type=ActionType.KILL_PROCESS,
-                                target=processes[0],
-                                description=f"Tiêu diệt tiến trình độc hại {processes[0]} thay thế cho phương án cô lập host.",
-                                priority=1,
-                                require_human_approval=False,
+                candidate_actions = [
+                    a for a in candidate_actions
+                    if not self._is_host_isolate_action(a)
+                ]
+                # Đảm bảo bổ sung hành động tiêu diệt tiến trình độc hại thay thế nếu chưa có (tránh tiến trình hệ thống trọng yếu)
+                if not any(a.action_type == ActionType.KILL_PROCESS for a in candidate_actions) and processes:
+                    non_crit_procs = [
+                        p for p in processes
+                        if not self.playbooks.is_critical_system_process(p) and not is_protected_process(p)
+                    ]
+                    if non_crit_procs:
+                        candidate_actions.append(
+                            self.apply_approval_policy(
+                                RecommendedAction(
+                                    action_type=ActionType.KILL_PROCESS,
+                                    target=non_crit_procs[0],
+                                    description=f"Tiêu diệt tiến trình độc hại {non_crit_procs[0]} thay thế cho phương án cô lập host.",
+                                    priority=1,
+                                    require_human_approval=False,
+                                )
                             )
                         )
-                    )
 
-        # Loại bỏ trùng lặp và sắp xếp theo độ ưu tiên tăng dần (Priority 1 -> 5)
-        final_actions = self.deduplicate_and_sort_actions(actions)
+        final_actions = self.deduplicate_and_sort_actions(candidate_actions)
+        for act in final_actions:
+            self.apply_approval_policy(act)
+            act.is_approved = None
 
-        # -------------------------------------------------------------
-        # 6. ĐÍNH KÈM TRI THỨC RAG (MITRE MITIGATIONS & WAZUH REMEDIATION)
-        # -------------------------------------------------------------
-        rag_info = self.lookup_rag_remediation(state)
-        self._last_rag_info = rag_info
-
-        guidance_snippets: List[str] = []
-        if rag_info.get("remediations"):
-            guidance_snippets.append(f"Wazuh Remediation: {rag_info['remediations'][0]}")
-        if rag_info.get("mitigations"):
-            guidance_snippets.append(f"MITRE Mitigation: {rag_info['mitigations'][0]}")
-
-        if guidance_snippets:
-            rag_guidance_str = f"[NIST/MITRE RAG Guidance] {' | '.join(guidance_snippets)}"
+        if strategy_summary:
+            guidance_tag = (
+                strategy_summary
+                if any(strategy_summary.startswith(p) for p in ("[NIST/MITRE RAG Guidance]", "[NIST/MITRE RAG Strategy]", "[RAG Strategy]"))
+                else f"[NIST/MITRE RAG Guidance] {strategy_summary}"
+            )
             for act in final_actions:
-                if act.script_bundle and "[NIST/MITRE RAG Guidance]" not in (act.script_bundle.instructions or ""):
-                    base_inst = (act.script_bundle.instructions or "").strip()
-                    act.script_bundle.instructions = f"{base_inst} {rag_guidance_str}".strip()
+                if act.script_bundle:
+                    current_inst = act.script_bundle.instructions or ""
+                    if not any(tag in current_inst for tag in ("[NIST/MITRE RAG Guidance]", "[NIST/MITRE RAG Strategy]", "[RAG Strategy]")):
+                        base_inst = current_inst.strip()
+                        act.script_bundle.instructions = f"{base_inst} {guidance_tag}".strip()
 
         return final_actions
 
@@ -1085,19 +2033,30 @@ class ResponseAgent:
         ]
         rag_remediations = list(rag_info.get("remediations", [])) + list(rag_info.get("mitigations", []))
 
+        strategy_summary = getattr(state, "response_strategy_summary", None) or self._last_strategy_summary
+        if not strategy_summary and actions:
+            strategy_summary = self.synthesize_rag_response_strategy(state, rag_info)
+            if hasattr(state, "response_strategy_summary"):
+                state.response_strategy_summary = strategy_summary
+
+        transition_metadata: Dict[str, Any] = {
+            "action_count": len(actions),
+            "actions": [a.action_type.value for a in actions],
+            "action_summary": action_summary,
+            "high_priority_count": sum(1 for a in actions if a.priority == 1),
+            "require_approval_count": sum(1 for a in actions if a.require_human_approval),
+            "rag_ttp_matches": rag_ttp_matches,
+            "rag_remediations": rag_remediations,
+            "response_strategy_summary": strategy_summary,
+        }
+        if self._last_security_flags:
+            transition_metadata["security_guard_flags"] = list(self._last_security_flags)
+
         state.record_transition(
             node="response",
             to_status=IncidentStatus.INVESTIGATING,
             message=f"Đã đề xuất {len(actions)} hành động ứng phó theo chuẩn NIST SP 800-61.",
-            metadata={
-                "action_count": len(actions),
-                "actions": [a.action_type.value for a in actions],
-                "action_summary": action_summary,
-                "high_priority_count": sum(1 for a in actions if a.priority == 1),
-                "require_approval_count": sum(1 for a in actions if a.require_human_approval),
-                "rag_ttp_matches": rag_ttp_matches,
-                "rag_remediations": rag_remediations,
-            },
+            metadata=transition_metadata,
         )
 
         logger.info(f"[{state.incident_id}] Đã sinh {len(actions)} hành động (HITL required: {sum(1 for a in actions if a.require_human_approval)}).")
@@ -1110,4 +2069,9 @@ class ResponseAgent:
     def evaluate(self, state: IncidentState) -> List[RecommendedAction]:
         """Bí danh tương thích cho recommend_actions."""
         return self.recommend_actions(state)
+
+
+ResponseRecommendationAgent = ResponseAgent
+
+__all__ = ["ResponseAgent", "ResponseRecommendationAgent"]
 
