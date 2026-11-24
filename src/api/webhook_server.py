@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 src/api/webhook_server.py
-Cổng tiếp nhận cảnh báo tự động qua Webhook từ máy chủ Wazuh OVA (172.16.65.150).
+Cổng tiếp nhận cảnh báo tự động qua Webhook từ máy chủ Wazuh OVA.
 Được thiết kế tối ưu với Starlette / ASGI Framework + Uvicorn:
-1. Xác thực an toàn: Token bí mật (Constant-time comparison) + Whitelist IP nguồn.
-2. Giới hạn dung lượng Payload (2MB Max) và Pydantic Schema Validation chống DoS.
+1. Xác thực an toàn: Token bí mật (Constant-time comparison) / HMAC-SHA256 + Whitelist IP nguồn.
+2. Giới hạn dung lượng Payload và Pydantic Schema Validation chống DoS.
 3. Phản hồi 202 Accepted tức thời (<20ms) kết hợp BackgroundTasks để không nghẽn Wazuh Integrator.
 4. Lọc mức độ cảnh báo (Rule level threshold) và khử trùng lặp (Time-window Deduplication).
-5. Luồng xử lý nền: IngestionAgent -> StateGraphOrchestrator -> IncidentStore.
+5. Luồng xử lý nền: IngestionAgent -> Full 6-Agent StateGraph Pipeline -> IncidentStore.
 """
 
 import os
@@ -26,26 +26,32 @@ from starlette.routing import Route
 from starlette.requests import Request
 from starlette.background import BackgroundTasks
 
+from src.core.config import (
+    load_project_env,
+    get_wazuh_ova_ip,
+    get_wazuh_allowed_ips,
+    get_wazuh_min_level,
+    get_max_body_size,
+    get_webhook_port,
+)
 from src.core.schemas import IncidentStatus
 from src.core.incident_store import IncidentStore
 from src.agents.ingestion_agent import IngestionAgent
-from src.core.orchestrator import StateGraphOrchestrator
+from src.core.orchestrator import (
+    HAS_LANGGRAPH,
+    StateGraphOrchestrator,
+    create_full_soc_pipeline,
+)
 
 logger = logging.getLogger("WazuhWebhookServer")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
 
-# Cấu hình môi trường mặc định (hỗ trợ toàn bộ dải mạng ảo 172.16.65.0/24 cho Wazuh DHCP động)
+# Giá trị mặc định an toàn (KHÔNG gọi load_project_env() ở module import top-level)
 DEFAULT_SECRET = "soc-super-secret-token-2026"
 WAZUH_WEBHOOK_SECRET = os.getenv("WAZUH_WEBHOOK_SECRET", DEFAULT_SECRET)
-if not os.getenv("WAZUH_WEBHOOK_SECRET") or os.getenv("WAZUH_WEBHOOK_SECRET") == DEFAULT_SECRET:
-    logger.warning(
-        "⚠️ CẢNH BÁO BẢO MẬT: WAZUH_WEBHOOK_SECRET đang sử dụng giá trị mặc định (dev secret). "
-        "Hãy thiết lập biến môi trường WAZUH_WEBHOOK_SECRET với khóa bí mật mạnh trong môi trường production!"
-    )
-WAZUH_ALLOWED_IPS_RAW = os.getenv("WAZUH_ALLOWED_IPS", "172.16.65.0/24,127.0.0.1,localhost")
-WAZUH_ALLOWED_IPS = [ip.strip() for ip in WAZUH_ALLOWED_IPS_RAW.split(",") if ip.strip()]
-WAZUH_MIN_LEVEL = int(os.getenv("WAZUH_MIN_LEVEL", "7"))
-MAX_BODY_SIZE = int(os.getenv("MAX_BODY_SIZE", str(2 * 1024 * 1024)))  # 2MB
+WAZUH_ALLOWED_IPS = get_wazuh_allowed_ips()
+WAZUH_MIN_LEVEL = get_wazuh_min_level()
+MAX_BODY_SIZE = get_max_body_size()
 
 
 class WebhookService:
@@ -60,22 +66,38 @@ class WebhookService:
         allowed_ips: Optional[List[str]] = None,
         min_level: Optional[int] = None,
         auto_approve: bool = False,
+        max_body_size: Optional[int] = None,
+        llm_provider: Optional[Any] = None,
+        use_langgraph_engine: bool = True,
     ):
+        load_project_env()
         self.incident_store = incident_store or IncidentStore()
         self.ingestion_agent = ingestion_agent or IngestionAgent()
         self.auto_approve = auto_approve
-        self.orchestrator = orchestrator or StateGraphOrchestrator(
+        self.orchestrator = orchestrator or create_full_soc_pipeline(
             ingestion_agent=self.ingestion_agent,
-            auto_approve=self.auto_approve
+            auto_approve=self.auto_approve,
+            llm_provider=llm_provider,
+            use_langgraph_engine=use_langgraph_engine,
         )
-        self.secret_token = secret_token or WAZUH_WEBHOOK_SECRET
+        self.llm_provider = getattr(self.orchestrator, "llm_provider", None) or llm_provider
+        self.secret_token = secret_token or os.getenv("WAZUH_WEBHOOK_SECRET") or DEFAULT_SECRET
         if self.secret_token == DEFAULT_SECRET:
+            require_strong_secret = (
+                os.getenv("SOC_ENV", "").strip().lower() == "production"
+                or os.getenv("WAZUH_REQUIRE_STRONG_SECRET", "").strip().lower() in {"1", "true", "yes"}
+            )
+            if require_strong_secret:
+                raise ValueError(
+                    "WAZUH_WEBHOOK_SECRET must be set to a strong non-default secret in production mode"
+                )
             logger.warning(
                 "⚠️ WebhookService: Đang sử dụng secret token mặc định. "
                 "Khuyến nghị cấu hình biến môi trường WAZUH_WEBHOOK_SECRET cho production."
             )
-        self.allowed_ips = allowed_ips or WAZUH_ALLOWED_IPS
-        self.min_level = min_level if min_level is not None else WAZUH_MIN_LEVEL
+        self.allowed_ips = allowed_ips if allowed_ips is not None else get_wazuh_allowed_ips()
+        self.min_level = min_level if min_level is not None else get_wazuh_min_level()
+        self.max_body_size = max_body_size if max_body_size is not None else get_max_body_size()
 
     @staticmethod
     def compute_hmac_sha256(secret: str, payload: Union[bytes, str]) -> str:
@@ -87,7 +109,7 @@ class WebhookService:
     def verify_auth(self, request: Request, raw_body: Optional[bytes] = None) -> Tuple[bool, Optional[str]]:
         """
         Xác thực tính hợp lệ của request từ Wazuh OVA:
-        1. Kiểm tra IP nguồn kết nối TCP trực tiếp (hỗ trợ cả dải mạng CIDR ví dụ 172.16.65.0/24).
+        1. Kiểm tra IP nguồn kết nối TCP trực tiếp (hỗ trợ cả địa chỉ đơn lẻ và dải mạng CIDR).
         2. Xác thực tính toàn vẹn và nguồn gốc qua HMAC-SHA256 signature (X-Wazuh-Signature-SHA256 hoặc X-Hub-Signature-256).
         3. Hỗ trợ xác thực Secret Token cũ (X-Wazuh-Secret-Token hoặc X-Wazuh-Secret) để tương thích ngược.
         """
@@ -187,15 +209,82 @@ class WebhookService:
 
 def create_app(service: Optional[WebhookService] = None) -> Starlette:
     """Khởi tạo ứng dụng Starlette ASGI Webhook Server."""
+    load_project_env()
     svc = service or WebhookService()
 
     async def health_check(request: Request) -> JSONResponse:
         """Endpoint kiểm tra trạng thái hoạt động của Webhook Server."""
+        orch = getattr(svc, "orchestrator", None)
+        langgraph_enabled = bool(
+            HAS_LANGGRAPH and getattr(orch, "use_langgraph_engine", False)
+        )
+        pipeline_agents = {
+            "ingestion": getattr(orch, "ingestion_agent", None) is not None,
+            "triage": getattr(orch, "triage_agent", None) is not None,
+            "threat_intel": getattr(orch, "threat_intel_agent", None) is not None,
+            "rca": getattr(orch, "rca_agent", None) is not None,
+            "response": getattr(orch, "response_agent", None) is not None,
+            "reporting": getattr(orch, "reporting_agent", None) is not None,
+        }
+
+        probe_llm = str(request.query_params.get("probe_llm", "false")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        provider = getattr(svc, "llm_provider", None) or getattr(orch, "llm_provider", None)
+        if provider is None:
+            llm_status: Dict[str, Any] = {
+                "configured": False,
+                "connected": False,
+                "active_provider": "none",
+                "configured_mode": "none",
+                "model": None,
+                "probed": False,
+            }
+        elif probe_llm and hasattr(provider, "check_health"):
+            health = provider.check_health(force=True, timeout=1.5)
+            health_data = (
+                health.model_dump(mode="json")
+                if hasattr(health, "model_dump")
+                else dict(health)
+            )
+            llm_status = {"configured": True, "probed": True, **health_data}
+        else:
+            cached = getattr(provider, "last_health", None) or getattr(
+                provider, "_last_health_status", None
+            )
+            if cached is not None and hasattr(cached, "model_dump"):
+                llm_status = {
+                    "configured": True,
+                    "probed": False,
+                    **cached.model_dump(mode="json"),
+                }
+            else:
+                active_prov = (
+                    provider.get_active_provider()
+                    if hasattr(provider, "get_active_provider")
+                    else getattr(provider, "last_used_provider", None) or "unknown"
+                )
+                llm_status = {
+                    "configured": True,
+                    "probed": False,
+                    "connected": None,
+                    "active_provider": active_prov,
+                    "configured_mode": getattr(provider, "provider_mode", "auto"),
+                    "model": getattr(provider, "model", None),
+                }
+
         return JSONResponse(
             {
                 "status": "healthy",
                 "service": "wazuh-webhook-receiver",
                 "min_rule_level": svc.min_level,
+                "webhook_port": get_webhook_port(),
+                "wazuh_ova_ip": get_wazuh_ova_ip(),
+                "langgraph_enabled": langgraph_enabled,
+                "pipeline_agents": pipeline_agents,
+                "llm_status": llm_status,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
@@ -228,19 +317,20 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
         Endpoint chính tiếp nhận HTTP POST cảnh báo từ Wazuh OVA.
         """
         # 1. Kiểm tra giới hạn dung lượng Content-Length trước khi đọc body
+        max_body_limit = getattr(svc, "max_body_size", None) or get_max_body_size()
         content_length = request.headers.get("Content-Length")
-        if content_length and int(content_length) > MAX_BODY_SIZE:
+        if content_length and int(content_length) > max_body_limit:
             return JSONResponse(
-                {"status": "error", "error": f"Payload too large (Max: {MAX_BODY_SIZE} bytes)"},
+                {"status": "error", "error": f"Payload too large (Max: {max_body_limit} bytes)"},
                 status_code=413,
             )
 
         # 2. Đọc raw body (kiểm tra dung lượng an toàn)
         try:
             body = await request.body()
-            if len(body) > MAX_BODY_SIZE:
+            if len(body) > max_body_limit:
                 return JSONResponse(
-                    {"status": "error", "error": f"Payload too large (Max: {MAX_BODY_SIZE} bytes)"},
+                    {"status": "error", "error": f"Payload too large (Max: {max_body_limit} bytes)"},
                     status_code=413,
                 )
         except Exception as err:
@@ -348,12 +438,41 @@ def create_app(service: Optional[WebhookService] = None) -> Starlette:
     return Starlette(routes=routes)
 
 
-# App instance mặc định chạy với Uvicorn
-app = create_app()
+_DEFAULT_APP: Optional[Starlette] = None
 
-if __name__ == "__main__":
+
+def get_app() -> Starlette:
+    """Khởi tạo lười (lazy) ASGI app mặc định cho Uvicorn mà không chạy side-effect khi import module."""
+    global _DEFAULT_APP
+    if _DEFAULT_APP is None:
+        _DEFAULT_APP = create_app()
+    return _DEFAULT_APP
+
+
+class _LazyASGIApp:
+    """Proxy ASGI lười giúp `from src.api.webhook_server import app` không kích hoạt load_project_env() ở import-time."""
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        target = get_app()
+        await target(scope, receive, send)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(get_app(), name)
+
+
+app = _LazyASGIApp()
+
+
+def main() -> None:
+    """Entrypoint CLI khởi động Webhook Server."""
     import uvicorn
-    port = int(os.getenv("PORT", "8000"))
+
+    load_project_env(force=True)
+    port = get_webhook_port()
     host = os.getenv("HOST", "0.0.0.0")
     print(f"🚀 Khởi động Wazuh Webhook Receiver tại http://{host}:{port}")
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run(get_app(), host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()

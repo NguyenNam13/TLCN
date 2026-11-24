@@ -14,6 +14,7 @@ import json
 import io
 import html
 import re
+import inspect
 import ipaddress
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
@@ -29,6 +30,19 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 
+from src.core.config import (
+    load_project_env,
+    get_wazuh_ova_ip,
+    get_wazuh_host_ip,
+    get_webhook_port,
+    get_llm_provider_mode,
+    get_omnirouter_api_key,
+    get_omnirouter_endpoint,
+    get_llm_model,
+    get_ollama_url,
+    get_ollama_model,
+    get_llm_timeout,
+)
 from src.core.schemas import (
     IncidentStatus,
     SeverityLevel,
@@ -37,11 +51,12 @@ from src.core.schemas import (
 )
 from src.core.state import IncidentState
 from src.core.time_utils import format_vn_time
-from src.core.orchestrator import StateGraphOrchestrator
+from src.core.orchestrator import StateGraphOrchestrator, create_full_soc_pipeline
 from src.core.hitl_manager import HITLManager
 from src.agents.reporting_agent import ReportingAgent
 from src.core.incident_store import IncidentStore
 from src.copilot.engine import SOCCopilotEngine
+from src.copilot.llm_provider import HybridLLMProvider
 from src.ui.components import (
     render_kpi_cards,
     get_kpi_metrics,
@@ -60,16 +75,26 @@ from src.ui.components import (
     apply_hitl_action_decision,
     render_hitech_agent_workflow,
     get_hitech_workflow_html,
+    render_llm_health_badge,
+    render_llm_telemetry_panel,
     ROLE_SOC_ANALYST,
+    ROLE_TIER1,
     ROLE_SOC_MANAGER,
     USER_ROLES,
     DANGEROUS_ACTIONS,
+    PROTECTED_PROCESSES,
     SYSTEM_CRITICAL_PROCESSES,
+    PERMISSION_MATRIX,
+    extract_action_type_str,
     is_dangerous_action,
+    is_protected_process,
     is_critical_system_process,
+    has_permission,
     can_user_approve_action,
+    check_action_permission,
     get_action_rbac_warning,
     get_whitelist_guard_warning,
+    enforce_hitl_rbac,
 )
 
 # Thiết lập cấu hình trang Streamlit
@@ -92,7 +117,7 @@ SCENARIO_CATALOG = {
     "live_wazuh": {
         "title": "🔴 Live Wazuh OVA (Nhận cảnh báo tự động qua Webhook)",
         "file_names": [],
-        "description": "Nhận luồng cảnh báo tự động thời gian thực từ máy chủ Wazuh OVA (172.16.65.150) qua Webhook (:8000).",
+        "description": "Nhận luồng cảnh báo tự động thời gian thực từ máy chủ Wazuh OVA qua Webhook.",
         "expected_severity": "LIVE / DYNAMIC",
     },
     "malware": {
@@ -187,7 +212,8 @@ def load_scenario_alerts(
                     return alerts, f"🔴 Live Wazuh: Sự cố {latest_inc.incident_id} ({latest_inc.attack_type or 'Mới nhận'})"
         except Exception:
             pass
-        return [], "🔴 Live Wazuh: Đang chờ nhận cảnh báo từ Wazuh OVA (:8000/api/v1/wazuh-alert)..."
+        webhook_port = get_webhook_port()
+        return [], f"🔴 Live Wazuh: Đang chờ nhận cảnh báo từ Wazuh OVA (:{webhook_port}/api/v1/wazuh-alert)..."
 
     info = SCENARIO_CATALOG.get(scenario_key)
     if not info:
@@ -319,17 +345,435 @@ def render_report_export_buttons(report: IncidentReport, key_prefix: str) -> Non
         )
 
 
+def _safe_field(obj: Any, key: str, default: Any = None) -> Any:
+    """Truy xuất thuộc tính hoặc khóa dict an toàn, bỏ qua giá trị Mock không thật."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    val = getattr(obj, key, default)
+    if type(val).__module__.startswith("unittest.mock"):
+        return default
+    return val
+
+
+def _extract_grounded_operational_metrics(state: IncidentState) -> Dict[str, str]:
+    """Trích xuất chỉ số vận hành thực đo (MTTA/MTTC/MTTR/SLA) từ report hoặc state.history."""
+    report = getattr(state, "final_report", None)
+    op = _safe_field(report, "operational_metrics", None)
+    if op is not None:
+        mtta = str(_safe_field(op, "mtta_display", "") or "N/A (Chưa đo)")
+        mttc = str(_safe_field(op, "mttc_display", "") or "N/A (Chưa đo)")
+        mttr = str(_safe_field(op, "mttr_display", "") or "N/A (Chưa đo)")
+        sla = str(_safe_field(op, "sla_status", "") or "Chưa đánh giá")
+        return {"mtta": mtta, "mttc": mttc, "mttr": mttr, "sla": sla}
+
+    history = getattr(state, "history", []) or []
+    triage_ts = next((h.timestamp for h in history if h.node in ("triage", "TriageAgent")), None)
+    hitl_ts = next(
+        (h.timestamp for h in history if h.node in ("hitl_approval", "hitl_manager") and h.to_status == IncidentStatus.CONTAINED),
+        None,
+    )
+    resolved_ts = next(
+        (h.timestamp for h in history if h.node in ("reporting", "ReportingAgent") and h.to_status == IncidentStatus.RESOLVED),
+        None,
+    )
+    base_ts = getattr(state, "created_at", None)
+
+    def _fmt_delta(t_end: Optional[datetime], t_start: Optional[datetime]) -> str:
+        if t_end and t_start:
+            secs = max(0.0, (t_end - t_start).total_seconds())
+            return f"{secs:.2f} giây" if secs < 60 else f"{secs / 60:.1f} phút"
+        return "N/A (Chưa đo)"
+
+    mtta = _fmt_delta(triage_ts, base_ts)
+    mttc = _fmt_delta(hitl_ts, base_ts)
+    mttr = _fmt_delta(resolved_ts, base_ts)
+    sla = "Đạt SLA phản ứng tự động" if hitl_ts or resolved_ts else "Đang chờ hoàn tất xử lý"
+    return {"mtta": mtta, "mttc": mttc, "mttr": mttr, "sla": sla}
+
+
+def _extract_grounded_five_whys(state: IncidentState) -> Tuple[bool, List[str]]:
+    """Trích xuất chuỗi 5-Whys gắn chặt với bằng chứng thật trong IncidentReport/IncidentState."""
+    report = getattr(state, "final_report", None)
+    deep_rca = _safe_field(report, "deep_rca_breakdown", None)
+    if deep_rca is not None:
+        applicable = bool(_safe_field(deep_rca, "applicable", True))
+        whys = _safe_field(deep_rca, "five_whys", None)
+        if isinstance(whys, list) and whys:
+            return applicable, [str(w) for w in whys]
+        if not applicable:
+            return False, []
+
+    if state.triage_result and not state.triage_result.is_incident:
+        return False, []
+
+    if not state.rca_result and not state.parsed_events and not state.triage_result:
+        return False, []
+
+    events = state.parsed_events or []
+    hosts = sorted({e.host_name for e in events if e.host_name and e.host_name != "UNKNOWN-HOST"})
+    procs = sorted({e.process_name for e in events if e.process_name})
+    cmds = [str(e.raw_attributes.get("decoded_command") or e.command_line or "").strip() for e in events if (e.command_line or e.raw_attributes.get("decoded_command"))]
+    ext_ips = sorted({ip for e in events for ip in (e.source_ip, e.dest_ip) if ip and not ip.startswith(("127.", "10.", "192.168."))})
+    ports = sorted({str(e.dest_port) for e in events if e.dest_port})
+    mitre_list = list(getattr(state.threat_intel, "mitre_techniques", []) or []) if state.threat_intel else []
+    init_vec = state.rca_result.initial_access_vector if state.rca_result else "Chưa xác định (chờ RCA)"
+    rca_sum = state.rca_result.root_cause_summary if state.rca_result else (state.triage_result.summary if state.triage_result else "Đang thu thập bằng chứng")
+
+    host_str = ", ".join(hosts) if hosts else "chưa định danh host"
+    proc_str = ", ".join(procs) if procs else "không có tiến trình cụ thể"
+    cmd_preview = cmds[0][:140] if cmds else "không ghi nhận dòng lệnh cụ thể"
+    net_str = f"IP {', '.join(ext_ips)}" + (f" (cổng {', '.join(ports)})" if ports else "") if ext_ips else "không ghi nhận kết nối IP công khai"
+    mitre_str = ", ".join(mitre_list) if mitre_list else "chưa ánh xạ kỹ thuật MITRE"
+
+    return True, [
+        f"**Why 1 (Triệu chứng ghi nhận):** Hệ thống ghi nhận cảnh báo `{state.attack_type or 'Security Incident'}` trên `{host_str}` với tiến trình `{proc_str}`.",
+        f"**Why 2 (Cơ chế thực thi / Truy cập):** Hoạt động khởi phát theo vector `{init_vec}` kèm dấu vết: `{cmd_preview}`.",
+        f"**Why 3 (Kênh mạng & Tương tác):** Giao tiếp mạng quan sát được: {net_str}.",
+        f"**Why 4 (Kỹ thuật & Điểm yếu kiểm soát):** Dấu vết kỹ thuật ánh xạ `{mitre_str}` chưa bị chặn tự động tại lớp kiểm soát phòng vệ ban đầu.",
+        f"**Why 5 (Nguyên nhân gốc rễ - Root Cause):** {rca_sum}",
+    ]
+
+
+def _extract_grounded_ishikawa(state: IncidentState) -> Tuple[bool, List[Dict[str, str]]]:
+    """Trích xuất các nhánh Ishikawa gắn với dữ liệu thực tế của sự cố."""
+    report = getattr(state, "final_report", None)
+    deep_rca = _safe_field(report, "deep_rca_breakdown", None)
+    if deep_rca is not None:
+        applicable = bool(_safe_field(deep_rca, "applicable", True))
+        factors = _safe_field(deep_rca, "ishikawa_factors", None)
+        if isinstance(factors, list) and factors:
+            return applicable, [dict(f) for f in factors if isinstance(f, dict)]
+        if not applicable:
+            return False, []
+
+    if state.triage_result and not state.triage_result.is_incident:
+        return False, []
+    if not state.rca_result and not state.parsed_events and not state.triage_result:
+        return False, []
+
+    events = state.parsed_events or []
+    users = sorted({e.user_name for e in events if e.user_name and e.user_name != "UNKNOWN-USER"})
+    hosts = sorted({e.host_name for e in events if e.host_name and e.host_name != "UNKNOWN-HOST"})
+    procs = sorted({e.process_name for e in events if e.process_name})
+    ext_ips = sorted({ip for e in events for ip in (e.source_ip, e.dest_ip) if ip and not ip.startswith(("127.", "10.", "192.168."))})
+    mitre_list = list(getattr(state.threat_intel, "mitre_techniques", []) or []) if state.threat_intel else []
+    init_vec = state.rca_result.initial_access_vector if state.rca_result else "Chưa xác định"
+    rule_levels = [int(e.raw_attributes.get("wazuh_rule_level", 0)) for e in events if e.raw_attributes.get("wazuh_rule_level") is not None]
+    max_lvl = max(rule_levels) if rule_levels else 0
+
+    return True, [
+        {
+            "category": "👤 1. Con người (People)",
+            "detail": f"Tài khoản liên quan: {', '.join(users) if users else 'Chưa ghi nhận tài khoản cụ thể'}. Vector ban đầu: {init_vec}.",
+        },
+        {
+            "category": "📋 2. Quy trình (Process)",
+            "detail": f"Trạng thái xử lý hiện tại: {state.status.value}. Số hành động ứng phó đề xuất: {len(state.recommended_actions)}.",
+        },
+        {
+            "category": "💻 3. Công nghệ (Technology)",
+            "detail": f"Thiết bị/Agent: {', '.join(hosts) if hosts else 'N/A'}. Tiến trình quan sát: {', '.join(procs) if procs else 'Không có'}.",
+        },
+        {
+            "category": "🌐 4. Môi trường Mạng (Environment)",
+            "detail": f"IP ngoại vi liên quan: {', '.join(ext_ips) if ext_ips else 'Không phát hiện lưu lượng IP ngoại vi'}.",
+        },
+        {
+            "category": "📜 5. Chính sách Quản trị (Policy)",
+            "detail": f"Kỹ thuật MITRE ghi nhận: {', '.join(mitre_list) if mitre_list else 'Chưa có ánh xạ MITRE'}. Cần rà soát kiểm soát phòng ngừa tương ứng.",
+        },
+        {
+            "category": "📡 6. Giám sát & SOC (Monitoring)",
+            "detail": f"Đã thu thập {len(events)} sự kiện từ {len(state.raw_logs)} logs thô (Wazuh Rule Level cao nhất: {max_lvl}).",
+        },
+    ]
+
+
+def _extract_grounded_impact(state: IncidentState) -> Dict[str, Any]:
+    """Đánh giá tác động CIA và tuân thủ NĐ 13/2023 dựa trên bằng chứng thật."""
+    report = getattr(state, "final_report", None)
+    impact = _safe_field(report, "impact_assessment", None)
+    if impact is not None:
+        conf = _safe_field(impact, "confidentiality", None)
+        integ = _safe_field(impact, "integrity", None)
+        avail = _safe_field(impact, "availability", None)
+        return {
+            "c_level": str(_safe_field(conf, "level", "Chưa đánh giá")),
+            "c_text": str(_safe_field(conf, "assessment", "")),
+            "i_level": str(_safe_field(integ, "level", "Chưa đánh giá")),
+            "i_text": str(_safe_field(integ, "assessment", "")),
+            "a_level": str(_safe_field(avail, "level", "Chưa đánh giá")),
+            "a_text": str(_safe_field(avail, "assessment", "")),
+            "compliance_note": str(_safe_field(impact, "compliance_note", "")),
+            "financial_note": str(_safe_field(impact, "financial_impact_note", "")),
+            "sla_note": str(_safe_field(impact, "operational_sla_note", "")),
+        }
+
+    is_benign = bool(state.triage_result and not state.triage_result.is_incident)
+    if is_benign:
+        return {
+            "c_level": "KHÔNG (None)",
+            "c_text": "Hoạt động được phân loại False Positive / Bình thường, không ghi nhận rò rỉ dữ liệu.",
+            "i_level": "KHÔNG (None)",
+            "i_text": "Không phát hiện thay đổi trái phép đối với hệ thống hoặc tệp tin.",
+            "a_level": "KHÔNG (None)",
+            "a_text": "Không có gián đoạn dịch vụ hoặc cô lập máy trạm.",
+            "compliance_note": "Không phát hiện dữ liệu cá nhân (PII) bị lộ lọt — chưa kích hoạt nghĩa vụ thông báo A05 theo Nghị định 13/2023/NĐ-CP.",
+            "financial_note": "Không ghi nhận thiệt hại tài chính (False Positive).",
+            "sla_note": "Đã đóng sự cố sớm theo luồng short-circuit.",
+        }
+
+    corpus = " ".join(
+        [
+            str(state.attack_type or ""),
+            str(state.triage_result.summary if state.triage_result else ""),
+            str(state.rca_result.root_cause_summary if state.rca_result else ""),
+            " ".join(str(e.command_line or "") for e in state.parsed_events),
+        ]
+    ).lower()
+    mitres = " ".join(getattr(state.threat_intel, "mitre_techniques", []) or []).upper() if state.threat_intel else ""
+    mal_iocs = [i for i in (getattr(state.threat_intel, "extracted_iocs", []) or []) if getattr(i, "is_malicious", False)] if state.threat_intel else []
+
+    has_cred_or_exfil = any(k in corpus for k in ("mimikatz", "lsass", "credential", "password", "exfil", "pii", "token")) or "T1003" in mitres
+    has_c2 = bool(mal_iocs) or "T1071" in mitres
+    has_exec_or_persist = any(e.process_name or e.file_hash for e in state.parsed_events) or any(t in mitres for t in ("T1059", "T1053", "T1105"))
+    isolated = any(str(getattr(a.action_type, "value", a.action_type)) == "ISOLATE_HOST" and a.is_approved is True for a in state.recommended_actions)
+
+    c_level = "CAO" if (has_cred_or_exfil or has_c2) else ("TRUNG BÌNH" if state.triage_result else "CHƯA ĐÁNH GIÁ")
+    c_text = (
+        f"Ghi nhận dấu hiệu truy cập thông tin xác thực/C2 ({len(mal_iocs)} IoC độc hại)."
+        if (has_cred_or_exfil or has_c2)
+        else "Chưa ghi nhận bằng chứng trích xuất hoặc rò rỉ dữ liệu ra ngoài."
+    )
+    i_level = "TRUNG BÌNH" if has_exec_or_persist else "THẤP"
+    i_text = (
+        "Phát hiện tiến trình hoặc tạo tệp thực thi đáng ngờ trên endpoint cần kiểm tra toàn vẹn."
+        if has_exec_or_persist
+        else "Chưa ghi nhận dấu hiệu sửa đổi tệp hệ thống hoặc thiết lập persistence."
+    )
+    a_level = "TRUNG BÌNH" if isolated else "THẤP"
+    a_text = (
+        "Máy trạm đã được phê duyệt cô lập để xử lý sự cố."
+        if isolated
+        else "Chưa thực thi cô lập máy trạm; dịch vụ hiện chưa bị ngắt bởi hành động phản ứng."
+    )
+    compliance_note = (
+        "Phát hiện chỉ dấu liên quan đến tài khoản/thông tin xác thực — cần rà soát khả năng lộ lọt dữ liệu cá nhân (PII) để xem xét nghĩa vụ báo cáo A05 theo Nghị định 13/2023/NĐ-CP."
+        if has_cred_or_exfil
+        else "Không phát hiện dữ liệu cá nhân (PII) bị lộ lọt trong bằng chứng hiện có — chưa kích hoạt nghĩa vụ báo cáo A05 theo Nghị định 13/2023/NĐ-CP."
+    )
+    return {
+        "c_level": c_level,
+        "c_text": c_text,
+        "i_level": i_level,
+        "i_text": i_text,
+        "a_level": a_level,
+        "a_text": a_text,
+        "compliance_note": compliance_note,
+        "financial_note": "Chưa ước tính thiệt hại tài chính trực tiếp (cần đánh giá bổ sung nếu phát sinh downtime thực tế).",
+        "sla_note": _extract_grounded_operational_metrics(state)["sla"],
+    }
+
+
+def _extract_grounded_verification_gate(state: IncidentState) -> List[Dict[str, Any]]:
+    """Tạo danh sách Cổng Kiểm định An toàn phản ánh trung thực trạng thái hoàn thành từ state/report."""
+    report = getattr(state, "final_report", None)
+    raw_gate = _safe_field(report, "verification_gate", None) or _safe_field(report, "verification_checklist", None)
+    if isinstance(raw_gate, list) and raw_gate:
+        items: List[Dict[str, Any]] = []
+        for idx, entry in enumerate(raw_gate):
+            label = str(_safe_field(entry, "label", "") or f"Hạng mục kiểm định #{idx + 1}")
+            checked = bool(_safe_field(entry, "checked", False))
+            detail = str(_safe_field(entry, "detail", "") or "")
+            items.append({"label": label, "checked": checked, "detail": detail})
+        return items
+
+    is_fp = state.status == IncidentStatus.CLOSED_FALSE_POSITIVE
+    actions = state.recommended_actions or []
+    req_actions = [a for a in actions if a.require_human_approval]
+    all_hitl_approved = bool(req_actions) and all(a.is_approved is True for a in req_actions)
+    has_rejected = any(a.is_approved is False for a in actions)
+
+    return [
+        {
+            "label": "Phân loại & Thẩm định Rủi ro (Triage)",
+            "checked": state.triage_result is not None,
+            "detail": state.triage_result.summary[:120] if state.triage_result else "Chưa chạy Triage Agent.",
+        },
+        {
+            "label": "Đối soát Tình báo IoC & Ánh xạ MITRE (CTI)",
+            "checked": (state.threat_intel is not None) or is_fp,
+            "detail": (
+                "Đóng sớm do False Positive."
+                if is_fp
+                else (
+                    f"Đã đối soát {len(state.threat_intel.extracted_iocs)} IoC."
+                    if state.threat_intel
+                    else "Chưa chạy Threat Intel Agent."
+                )
+            ),
+        },
+        {
+            "label": "Truy vết Nguyên nhân Gốc rễ (RCA)",
+            "checked": (state.rca_result is not None) or is_fp,
+            "detail": (
+                "Không yêu cầu RCA do False Positive."
+                if is_fp
+                else (state.rca_result.initial_access_vector if state.rca_result else "Chưa chạy RCA Agent.")
+            ),
+        },
+        {
+            "label": "Phê duyệt Hành động Ngăn chặn (HITL Gate)",
+            "checked": is_fp or (bool(actions) and all_hitl_approved and not has_rejected),
+            "detail": (
+                "Không cần hành động ngăn chặn."
+                if is_fp
+                else (
+                    "Toàn bộ hành động yêu cầu duyệt đã được phê duyệt."
+                    if all_hitl_approved
+                    else "Còn hành động đang chờ phê duyệt hoặc bị từ chối."
+                )
+            ),
+        },
+        {
+            "label": "Xuất bản & Lưu trữ Hồ sơ Sự cố (Reporting)",
+            "checked": (state.final_report is not None) or (state.status == IncidentStatus.RESOLVED),
+            "detail": (
+                f"Đã xuất bản báo cáo {state.final_report.report_id}."
+                if state.final_report
+                else "Chưa xuất bản báo cáo NIST SP 800-61."
+            ),
+        },
+    ]
+
+
+def _call_copilot_process_message(
+    copilot_engine: Any,
+    user_message: str,
+    state: IncidentState,
+    chat_history: List[Dict[str, str]],
+    user_role: Optional[str],
+) -> Any:
+    """Gọi copilot_engine.process_message có truyền user_role an toàn với cả mock cũ."""
+    kwargs: Dict[str, Any] = {
+        "user_message": user_message,
+        "state": state,
+        "chat_history": chat_history,
+    }
+    try:
+        sig = inspect.signature(copilot_engine.process_message)
+        if "user_role" in sig.parameters or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        ):
+            kwargs["user_role"] = user_role
+    except (TypeError, ValueError):
+        kwargs["user_role"] = user_role
+    return copilot_engine.process_message(**kwargs)
+
+
+def _call_execute_until_interrupt(
+    orch: Any,
+    state: IncidentState,
+    start_node: Optional[str] = None,
+) -> Tuple[bool, IncidentState]:
+    """Gọi orchestrator.execute_until_interrupt có truyền start_node an toàn với mock cũ."""
+    kwargs: Dict[str, Any] = {}
+    if start_node and start_node != "ingestion":
+        try:
+            sig = inspect.signature(orch.execute_until_interrupt)
+            if "start_node" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            ):
+                kwargs["start_node"] = start_node
+        except (TypeError, ValueError):
+            pass
+    return orch.execute_until_interrupt(state, **kwargs)
+
+
+def _call_resume_from_interrupt(
+    orch: Any,
+    state: IncidentState,
+    allow_feedback_loop: bool = True,
+) -> IncidentState:
+    """Gọi orchestrator.resume_from_interrupt an toàn với cả mock không nhận allow_feedback_loop."""
+    kwargs: Dict[str, Any] = {"state": state}
+    try:
+        sig = inspect.signature(orch.resume_from_interrupt)
+        if "allow_feedback_loop" in sig.parameters or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        ):
+            kwargs["allow_feedback_loop"] = allow_feedback_loop
+    except (TypeError, ValueError):
+        pass
+    return orch.resume_from_interrupt(**kwargs)
+
+
+def _refresh_llm_health_status(provider: Any) -> Any:
+    """Chủ động gọi check_health(force=True) an toàn cho nút '🔌 Kiểm tra LLM'."""
+    if provider is None:
+        return {
+            "connected": False,
+            "active_provider": "none",
+            "error": "Chưa khởi tạo LLM Provider.",
+        }
+    if hasattr(provider, "check_health") and callable(provider.check_health):
+        try:
+            sig = inspect.signature(provider.check_health)
+            if "force" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            ):
+                return provider.check_health(force=True)
+            return provider.check_health()
+        except Exception as exc:
+            return {
+                "connected": False,
+                "active_provider": "deterministic" if getattr(provider, "enable_fallback", True) else "none",
+                "model": getattr(provider, "model", "N/A"),
+                "error": str(exc),
+                "detail": f"Kiểm tra kết nối thất bại: {exc}",
+            }
+    return {
+        "connected": False,
+        "active_provider": "unverified",
+        "model": getattr(provider, "model", "default"),
+        "detail": "Provider không hỗ trợ kiểm tra health trực tiếp.",
+    }
+
+
+def build_shared_llm_provider() -> HybridLLMProvider:
+    """Khởi tạo HybridLLMProvider dùng chung dựa trên cấu hình tập trung src.core.config."""
+    mode = get_llm_provider_mode()
+    return HybridLLMProvider(
+        api_key=get_omnirouter_api_key(),
+        endpoint=get_omnirouter_endpoint(provider_mode=mode),
+        model=get_llm_model(),
+        ollama_url=get_ollama_url(),
+        ollama_model=get_ollama_model(),
+        provider_mode=mode,
+        timeout=get_llm_timeout(),
+        enable_fallback=True,
+    )
+
+
 # =====================================================================
 # 3. HEADLESS INTEGRITY CHECK (Tự kiểm tra không cần trình duyệt)
 # =====================================================================
-def run_dashboard_headless_check() -> bool:
+def run_dashboard_headless_check() -> Dict[str, Any]:
     """
     Kiểm tra khởi tạo và kết xuất các thành phần không cần trình duyệt web.
-    Bảo đảm 100% logic backend, nạp kịch bản, trích xuất KPI, định dạng IoC,
-    ma trận MITRE, cây tiến trình Sysmon, duyệt HITL và xuất báo cáo (MD, JSON, DOCX) hoạt động hoàn hảo.
+    Bảo đảm 100% logic backend, init_session_state, pipeline 6 Agent, trích xuất KPI,
+    định dạng IoC, ma trận MITRE, cây tiến trình Sysmon, duyệt HITL và xuất báo cáo
+    (MD, JSON, DOCX) hoạt động hoàn hảo.
 
-    :return: True nếu tất cả kiểm tra đều thành công.
+    :return: Dict chứa thông tin kiểm định (truthy khi thành công).
     """
+    # 0. Kiểm tra init_session_state
+    init_session_state()
+    if "orchestrator" not in st.session_state or "copilot_engine" not in st.session_state:
+        raise RuntimeError("init_session_state không khởi tạo được orchestrator/copilot_engine")
+
     # 1. Kiểm tra nạp kịch bản
     for skey in ["malware", "phishing", "network_scan", "benign"]:
         alerts, title = load_scenario_alerts(skey)
@@ -374,8 +818,26 @@ def run_dashboard_headless_check() -> bool:
     if "01 / TELEMETRY" not in hitech_standby:
         raise ValueError("Hitech Workflow HTML chế độ Standby không hợp lệ")
 
-    # 5. Thực thi đồ thị mẫu qua StateGraphOrchestrator
-    orch = StateGraphOrchestrator(hitl_manager=HITLManager(), auto_approve=False)
+    # 5. Thực thi đồ thị mẫu qua full 6-agent pipeline (chế độ deterministic offline nhanh)
+    shared_llm = HybridLLMProvider(provider_mode="deterministic", enable_fallback=True)
+    orch = create_full_soc_pipeline(
+        hitl_manager=HITLManager(),
+        auto_approve=False,
+        llm_provider=shared_llm,
+    )
+    if orch.auto_approve is not False or orch.enable_parallel_investigation is not False:
+        raise RuntimeError("Cấu hình mặc định của create_full_soc_pipeline không an toàn")
+    for agent_attr in (
+        "ingestion_agent",
+        "triage_agent",
+        "threat_intel_agent",
+        "rca_agent",
+        "response_agent",
+        "reporting_agent",
+    ):
+        if getattr(orch, agent_attr, None) is None:
+            raise RuntimeError(f"Pipeline thiếu agent '{agent_attr}'")
+
     is_paused, step_state = orch.execute_until_interrupt(state)
     if is_paused:
         final_state = orch.resume_after_hitl(
@@ -429,23 +891,24 @@ def run_dashboard_headless_check() -> bool:
         assert get_action_rbac_warning(ROLE_SOC_ANALYST, "ISOLATE_HOST") is not None
         assert get_whitelist_guard_warning("lsass.exe") is not None
 
-    # 8. Kiểm tra Xuất Báo cáo (Markdown, JSON, DOCX)
-    if final_state.final_report:
-        md_text = generate_markdown_report(final_state.final_report)
-        if "# " not in md_text or "Executive Summary" not in md_text:
-            raise ValueError("Markdown report export không chứa tiêu đề chuẩn")
+    # 8. Kiểm tra ReportingAgent & Xuất Báo cáo (Markdown, JSON, DOCX)
+    rep_agent = ReportingAgent(llm_provider=shared_llm)
+    report_obj = final_state.final_report or rep_agent.generate_report(final_state)
+    md_text = generate_markdown_report(report_obj)
+    if "# " not in md_text or "Executive Summary" not in md_text:
+        raise ValueError("Markdown report export không chứa tiêu đề chuẩn")
 
-        json_text = generate_json_report(final_state.final_report)
-        json_obj = json.loads(json_text)
-        if json_obj.get("report_id") != final_state.final_report.report_id:
-            raise ValueError("JSON report export sai report_id")
+    json_text = generate_json_report(report_obj)
+    json_obj = json.loads(json_text)
+    if json_obj.get("report_id") != report_obj.report_id:
+        raise ValueError("JSON report export sai report_id")
 
-        docx_bytes = generate_docx_report(final_state.final_report)
-        if not docx_bytes or len(docx_bytes) < 1000:
-            raise ValueError("DOCX report export trả về dữ liệu rỗng hoặc quá nhỏ")
+    docx_bytes = generate_docx_report(report_obj)
+    if not docx_bytes or len(docx_bytes) < 1000:
+        raise ValueError("DOCX report export trả về dữ liệu rỗng hoặc quá nhỏ")
 
     # 9. Kiểm tra Trợ lý SOC Engine & Provider
-    copilot_engine = SOCCopilotEngine()
+    copilot_engine = SOCCopilotEngine(llm_provider=shared_llm)
     if not hasattr(copilot_engine, "provider") or not copilot_engine.provider:
         raise ValueError("SOCCopilotEngine thiếu thuộc tính provider tương thích ngược")
     if not hasattr(copilot_engine.provider, "provider_type"):
@@ -459,7 +922,17 @@ def run_dashboard_headless_check() -> bool:
     if not copilot_res.response_text or len(copilot_res.response_text) < 20:
         raise ValueError("Trợ lý SOC trả về phản hồi rỗng hoặc không hợp lệ")
 
-    return True
+    return {
+        "ok": True,
+        "status": "PASS",
+        "init_session_state_ok": True,
+        "pipeline_agents": 6,
+        "shared_llm_provider": True,
+        "shared_rag_kb": orch.rag_kb is not None,
+        "reporting_ok": True,
+        "copilot_ok": True,
+        "incident_id": final_state.incident_id,
+    }
 
 
 # =====================================================================
@@ -467,14 +940,22 @@ def run_dashboard_headless_check() -> bool:
 # =====================================================================
 def init_session_state():
     """Khởi tạo trạng thái phiên làm việc Streamlit (Session State)."""
+    load_project_env()
+
+    if "llm_provider" not in st.session_state:
+        st.session_state.llm_provider = build_shared_llm_provider()
+
     if "orchestrator" not in st.session_state:
-        st.session_state.orchestrator = StateGraphOrchestrator(
+        st.session_state.orchestrator = create_full_soc_pipeline(
             hitl_manager=HITLManager(),
-            auto_approve=False
+            auto_approve=False,
+            llm_provider=st.session_state.llm_provider,
         )
 
     if "copilot_engine" not in st.session_state:
-        st.session_state.copilot_engine = SOCCopilotEngine()
+        st.session_state.copilot_engine = SOCCopilotEngine(
+            llm_provider=st.session_state.llm_provider
+        )
 
     if "copilot_messages" not in st.session_state:
         st.session_state.copilot_messages = [
@@ -507,6 +988,9 @@ def init_session_state():
     if "user_role" not in st.session_state:
         st.session_state.user_role = ROLE_SOC_ANALYST
 
+    if "llm_health_status" not in st.session_state:
+        st.session_state.llm_health_status = None
+
 
 def reset_pipeline(scenario_key: str, custom_content: Optional[str] = None):
     """Đặt lại pipeline điều phối về trạng thái ban đầu với kịch bản được chọn."""
@@ -534,8 +1018,9 @@ def reset_pipeline(scenario_key: str, custom_content: Optional[str] = None):
         except Exception:
             pass
 
-        # Khi Wazuh chưa gửi bất kỳ cảnh báo nào (Wazuh OVA chưa bật hoặc chưa bắn alert sang :8000):
+        # Khi Wazuh chưa gửi bất kỳ cảnh báo nào (Wazuh OVA chưa bật hoặc chưa bắn alert sang Webhook):
         # Thiết lập trạng thái Standby sạch sẽ, KHÔNG tự ý nạp kịch bản cũ hay báo đã hoàn tất!
+        webhook_port = get_webhook_port()
         inc_id = f"INC-WAZUH-STANDBY-{datetime.now(timezone.utc).strftime('%H%M%S')}"
         st.session_state.raw_alerts = []
         st.session_state.incident_state = IncidentState(
@@ -547,7 +1032,7 @@ def reset_pipeline(scenario_key: str, custom_content: Optional[str] = None):
         )
         st.session_state.current_node = "ingestion"
         try:
-            st.toast("📡 Đang ở chế độ Live Wazuh (Standby). Đang túc trực cổng Webhook :8000...", icon="ℹ️")
+            st.toast(f"📡 Đang ở chế độ Live Wazuh (Standby). Đang túc trực cổng Webhook :{webhook_port}...", icon="ℹ️")
         except Exception:
             pass
         return
@@ -563,17 +1048,25 @@ def run_full_pipeline():
     """Thực thi toàn bộ đồ thị StateGraph từ node hiện tại đến khi gặp điểm ngắt HITL hoặc hoàn tất."""
     state = st.session_state.incident_state
     if not state.raw_logs:
+        ova_ip = get_wazuh_ova_ip()
+        webhook_port = get_webhook_port()
         st.warning(
             "⚠️ **Chưa có cảnh báo nào từ Wazuh SIEM để điều tra!**\n\n"
-            "• Nếu đang ở chế độ **🔴 Live Wazuh**: Vui lòng khởi động máy ảo Wazuh OVA (172.16.65.150) và kích hoạt sự cố trên máy nạn nhân để gửi cảnh báo về Webhook `:8000/api/v1/wazuh-alert`.\n"
+            f"• Nếu đang ở chế độ **🔴 Live Wazuh**: Vui lòng khởi động máy ảo Wazuh OVA ({ova_ip}) và kích hoạt sự cố trên máy nạn nhân để gửi cảnh báo về Webhook `:{webhook_port}/api/v1/wazuh-alert`.\n"
             "• Hoặc chọn một trong các **📁 Kịch bản kiểm nghiệm mẫu** (Malware, Phishing, Port Scan) trên menu bên trái để trải nghiệm toàn trình."
         )
         return
 
     orch = st.session_state.orchestrator
+    curr_node = st.session_state.get("current_node")
+    start_node = curr_node if (curr_node is not None and curr_node != "ingestion") else None
 
     with st.spinner("🤖 Các AI Agents đang phối hợp điều tra sự cố..."):
-        is_paused, updated_state = orch.execute_until_interrupt(state)
+        is_paused, updated_state = _call_execute_until_interrupt(
+            orch=orch,
+            state=state,
+            start_node=start_node,
+        )
         st.session_state.incident_state = updated_state
 
         if is_paused:
@@ -609,8 +1102,9 @@ def run_single_step():
 
     state = st.session_state.incident_state
     if not state.raw_logs:
+        ova_ip = get_wazuh_ova_ip()
         st.warning(
-            "⚠️ **Chưa có cảnh báo nào từ Wazuh SIEM!** Vui lòng khởi động Wazuh OVA (172.16.65.150) hoặc chọn kịch bản mẫu từ menu bên trái."
+            f"⚠️ **Chưa có cảnh báo nào từ Wazuh SIEM!** Vui lòng khởi động Wazuh OVA ({ova_ip}) hoặc chọn kịch bản mẫu từ menu bên trái."
         )
         return
 
@@ -626,6 +1120,7 @@ def run_single_step():
 
 def main():
     """Hàm giao diện chính của ứng dụng Streamlit theo quy trình Wazuh SOC Multi-Agent."""
+    load_project_env()
     init_session_state()
 
     state: IncidentState = st.session_state.incident_state
@@ -734,15 +1229,18 @@ def main():
 
         if selected_source_mode == "live_wazuh":
             target_scenario_key = "live_wazuh"
+            ova_ip = html.escape(get_wazuh_ova_ip())
+            host_ip = html.escape(get_wazuh_host_ip())
+            webhook_port = get_webhook_port()
             st.markdown(
-                """
+                f"""
                 <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 8px; padding: 10px 12px; margin: 8px 0;">
                     <div style="color: #34d399; font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
                         <span>🟢 Webhook Receiver Đang Trực</span>
                     </div>
                     <div style="color: #cbd5e1; font-size: 0.78rem; margin-top: 6px; line-height: 1.6;">
-                        • <strong style="color: #94a3b8;">Endpoint:</strong> <code style="background: #0f172a; color: #38bdf8; border: 1px solid #334155; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">:8000/api/v1/wazuh-alert</code><br/>
-                        • <strong style="color: #94a3b8;">Wazuh OVA:</strong> <code style="background: #0f172a; color: #34d399; border: 1px solid #334155; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">172.16.65.150</code>
+                        • <strong style="color: #94a3b8;">Endpoint:</strong> <code style="background: #0f172a; color: #38bdf8; border: 1px solid #334155; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">{host_ip}:{webhook_port}/api/v1/wazuh-alert</code><br/>
+                        • <strong style="color: #94a3b8;">Wazuh OVA:</strong> <code style="background: #0f172a; color: #34d399; border: 1px solid #334155; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">{ova_ip}</code>
                     </div>
                 </div>
                 """,
@@ -818,6 +1316,22 @@ def main():
 
         if target_scenario_key in SCENARIO_CATALOG:
             st.caption(f"ℹ️ {SCENARIO_CATALOG[target_scenario_key]['description']}")
+
+        st.divider()
+        st.markdown("##### 🤖 Trạng thái AI Gateway:")
+        sidebar_provider = st.session_state.get("llm_provider")
+        sidebar_health = st.session_state.get("llm_health_status")
+        if sidebar_health is None and sidebar_provider is not None:
+            sidebar_health = getattr(sidebar_provider, "_last_health_status", None)
+        render_llm_health_badge(
+            sidebar_provider,
+            health=sidebar_health,
+            key_prefix="sidebar_llm",
+            probe=False,
+        )
+        if st.button("🔌 Kiểm tra LLM", key="sidebar_btn_check_llm", use_container_width=True):
+            st.session_state.llm_health_status = _refresh_llm_health_status(sidebar_provider)
+            st.rerun()
 
     # -------------------------------------------------------------
     # GIAO DIỆN CHÍNH THEO MENU ĐIỀU HƯỚNG
@@ -927,13 +1441,14 @@ def main():
         st.write("")
 
         # 2. THANH 5 BƯỚC WORKFLOW STAGES (CHUẨN NIST SP 800-61 & WAZUH SIEM)
+        _home_webhook_port = get_webhook_port()
         st.markdown(
-            """
+            f"""
             <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
                 <div style="background: #0f172a; border-top: 3px solid #38bdf8; border-left: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; border-radius: 8px; padding: 12px 14px;">
                     <div style="color: #38bdf8; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">WAZUH SIEM</div>
                     <div style="font-weight: 700; color: #f1f5f9; font-size: 0.88rem; margin: 4px 0;">Thu thập Cảnh báo</div>
-                    <div style="color: #94a3b8; font-size: 0.78rem; line-height: 1.4;">Nhận cảnh báo trực tiếp từ Wazuh OVA (:8000 Webhook) hoặc kịch bản kiểm nghiệm.</div>
+                    <div style="color: #94a3b8; font-size: 0.78rem; line-height: 1.4;">Nhận cảnh báo trực tiếp từ Wazuh OVA (:{_home_webhook_port} Webhook) hoặc kịch bản kiểm nghiệm.</div>
                 </div>
                 <div style="background: #0f172a; border-top: 3px solid #38bdf8; border-left: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; border-radius: 8px; padding: 12px 14px;">
                     <div style="color: #38bdf8; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">TRIAGE ENSEMBLE</div>
@@ -1040,43 +1555,38 @@ def main():
 
         with tab_rca2:
             st.markdown("### 🔍 Phân tích Chuỗi Nhân quả 5 Whys (Root Cause Analysis)")
-            st.caption("Phương pháp truy vết nhân quả từ triệu chứng bên ngoài đến lỗi quy trình và chính sách cốt lõi:")
+            st.caption("Truy vết nhân quả dựa trực tiếp trên bằng chứng thực tế trong IncidentState và báo cáo:")
 
-            init_vector = state.rca_result.initial_access_vector if state.rca_result else "Macro tệp đính kèm lạ"
-            attack_type_str = state.attack_type or "Endpoint Security Incident"
+            op_metrics = _extract_grounded_operational_metrics(state)
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("⏱️ MTTA", op_metrics["mtta"])
+            m2.metric("🛡️ MTTC", op_metrics["mttc"])
+            m3.metric("🔧 MTTR", op_metrics["mttr"])
+            m4.metric("📏 Trạng thái SLA", op_metrics["sla"])
 
-            st.markdown(
-                f"""
-                <div style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 18px; margin-bottom: 16px;">
-                    <div style="font-weight: 800; color: #f87171; font-size: 1.05rem; margin-bottom: 14px;">
-                        🚨 VẤN ĐỀ TRỌNG TÂM: Phát hiện {html.escape(str(attack_type_str or "Security Incident"))} - {html.escape(str(state.incident_id or "INC-UNKNOWN"))}
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <div style="background: #1e293b; border-left: 4px solid #38bdf8; padding: 12px 14px; border-radius: 6px;">
-                            <strong style="color: #38bdf8;">Why 1 (Hiện tượng bề mặt):</strong> Tại sao tiến trình độc hại được thực thi trên máy trạm?<br>
-                            <span style="color: #cbd5e1;">➜ Người dùng mở tệp văn bản kích hoạt script thông qua: <code>{html.escape(str(init_vector or "N/A"))}</code>.</span>
-                        </div>
-                        <div style="background: #1e293b; border-left: 4px solid #38bdf8; padding: 12px 14px; border-radius: 6px;">
-                            <strong style="color: #38bdf8;">Why 2 (Kỹ thuật thực thi):</strong> Tại sao lệnh PowerShell tải được payload từ ngoài Internet?<br>
-                            <span style="color: #cbd5e1;">➜ Kẻ tấn công sử dụng các cờ <code>-ExecutionPolicy Bypass -WindowStyle Hidden -enc</code> để vượt qua cơ chế kiểm tra dòng lệnh tĩnh.</span>
-                        </div>
-                        <div style="background: #1e293b; border-left: 4px solid #fbbf24; padding: 12px 14px; border-radius: 6px;">
-                            <strong style="color: #fbbf24;">Why 3 (Kiểm soát mạng):</strong> Tại sao kết nối C2 outbound qua cổng 443 không bị phát hiện ngay lập tức?<br>
-                            <span style="color: #cbd5e1;">➜ Lưu lượng mạng trà trộn vào lưu lượng SSL/TLS thông thường, tường lửa nội bộ chưa kiểm soát Egress Traffic theo từng tiến trình.</span>
-                        </div>
-                        <div style="background: #1e293b; border-left: 4px solid #fbbf24; padding: 12px 14px; border-radius: 6px;">
-                            <strong style="color: #fbbf24;">Why 4 (Cấu hình phòng vệ):</strong> Tại sao EDR agent không tự động chặn đứng tiến trình ngay từ bước tạo file Temp?<br>
-                            <span style="color: #cbd5e1;">➜ Chính sách EDR đang cấu hình ở chế độ Audit / Monitor nhằm tránh gây gián đoạn công việc nhân viên, chưa kích hoạt Active Blocking.</span>
-                        </div>
-                        <div style="background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-left: 4px solid #ef4444; padding: 14px; border-radius: 6px;">
-                            <strong style="color: #f87171;">Why 5 (NGUYÊN NHÂN GỐC RỄ - ROOT CAUSE):</strong> Tại sao chưa kích hoạt Active Blocking và chính sách PowerShell nghiêm ngặt?<br>
-                            <span style="color: #fecaca; font-weight: 500;">➜ Doanh nghiệp chưa hoàn tất quy trình chuẩn hóa chính sách ATTT (Policy Hardening), chưa triển khai PowerShell Constrained Language Mode và thiếu quy trình diễn tập mô phỏng tấn công định kỳ.</span>
+            applicable_whys, whys_list = _extract_grounded_five_whys(state)
+            if not applicable_whys or not whys_list:
+                if state.triage_result and not state.triage_result.is_incident:
+                    st.info("Sự cố được phân loại **Benign / False Positive** — không phát sinh chuỗi nhân quả tấn công 5-Whys.")
+                else:
+                    st.info("Chưa có dữ liệu phân tích nhân quả 5-Whys. Vui lòng chạy quy trình điều tra để tổng hợp.")
+            else:
+                attack_type_str = state.attack_type or "Security Incident"
+                st.markdown(
+                    f"""
+                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;">
+                        <div style="font-weight: 800; color: #f87171; font-size: 1.02rem; margin-bottom: 8px;">
+                            🚨 VẤN ĐỀ TRỌNG TÂM: {html.escape(str(attack_type_str))} — {html.escape(str(state.incident_id or "INC-UNKNOWN"))}
                         </div>
                     </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
+                for w_idx, why_item in enumerate(whys_list, start=1):
+                    if w_idx == len(whys_list):
+                        st.error(why_item)
+                    else:
+                        st.info(why_item)
 
             if state.rca_result and state.rca_result.attack_timeline:
                 st.markdown("#### ⏱️ Dòng thời gian Diễn biến Sự cố (Attack Timeline)")
@@ -1085,77 +1595,45 @@ def main():
 
         with tab_rca3:
             st.markdown("### 🐟 Biểu đồ Xương cá Ishikawa (Fishbone Diagram)")
-            st.caption("Bóc tách 6 nguyên nhân dẫn tới sự cố theo chuẩn quản trị an toàn thông tin doanh nghiệp:")
+            st.caption("Bóc tách các nhóm nguyên nhân từ bằng chứng sự cố thực tế:")
 
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                st.markdown(
-                    """
-                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-                        <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">👤 1. Con người (People)</div>
-                        <ul style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px;">
-                            <li>Người dùng thiếu cảnh giác khi mở tệp văn bản chứa macro từ email bên ngoài.</li>
-                            <li>Quản trị viên chưa quen với quy trình phản ứng nhanh khi EDR phát cảnh báo.</li>
-                        </ul>
-                    </div>
-                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-                        <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">📋 2. Quy trình (Process)</div>
-                        <ul style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px;">
-                            <li>Quy trình vá lỗi chưa có cam kết SLA 24h đối với các lỗ hổng Critical.</li>
-                            <li>Chưa có quy trình cô lập tức thời khi mức độ rủi ro vượt ngưỡng High.</li>
-                        </ul>
-                    </div>
-                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-                        <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">💻 3. Công nghệ (Technology)</div>
-                        <ul style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px;">
-                            <li>EDR chỉ đặt ở chế độ Monitor thay vì chủ động Enforce/Block.</li>
-                            <li>Thiếu hệ thống Mail Gateway Sandboxing quét trước tệp đính kèm.</li>
-                        </ul>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            with col_f2:
-                st.markdown(
-                    """
-                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-                        <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">🌐 4. Môi trường Mạng (Environment)</div>
-                        <ul style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px;">
-                            <li>Mạng nội bộ chưa được phân đoạn vi mô (Micro-segmentation) triệt để.</li>
-                            <li>Cho phép các máy trạm kết nối trực tiếp ra Internet cổng 443 không qua Web Proxy.</li>
-                        </ul>
-                    </div>
-                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-                        <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">📜 5. Chính sách Quản trị (Policy)</div>
-                        <ul style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px;">
-                            <li>Chưa áp dụng chính sách giới hạn PowerShell Constrained Language Mode trên GPO.</li>
-                            <li>Thiếu chính sách xoay vòng mật khẩu đặc quyền quản trị tự động.</li>
-                        </ul>
-                    </div>
-                    <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-                        <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">📡 6. Giám sát & SOC (Monitoring)</div>
-                        <ul style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px;">
-                            <li>Cảnh báo bị trôi do hiện tượng Alert Fatigue (quá nhiều log thông tin mức thấp).</li>
-                            <li>Thời gian phát hiện trung bình (MTTD) còn kéo dài trước khi có SOAR can thiệp.</li>
-                        </ul>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+            applicable_ishi, ishi_factors = _extract_grounded_ishikawa(state)
+            if not applicable_ishi or not ishi_factors:
+                if state.triage_result and not state.triage_result.is_incident:
+                    st.info("Sự cố được phân loại **Benign / False Positive** — không áp dụng biểu đồ xương cá Ishikawa.")
+                else:
+                    st.info("Chưa có dữ liệu Ishikawa. Vui lòng chạy quy trình điều tra để tổng hợp.")
+            else:
+                col_f1, col_f2 = st.columns(2)
+                for idx, factor in enumerate(ishi_factors):
+                    target_col = col_f1 if idx % 2 == 0 else col_f2
+                    cat = html.escape(str(factor.get("category") or factor.get("group") or f"Nhóm {idx + 1}"))
+                    detail_txt = html.escape(str(factor.get("detail") or factor.get("description") or factor.get("cause") or "Không ghi nhận."))
+                    with target_col:
+                        st.markdown(
+                            f"""
+                            <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                                <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">{cat}</div>
+                                <div style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px; line-height: 1.5;">{detail_txt}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
         with tab_rca4:
             st.markdown("### ⚖️ Đánh giá Tác động Toàn diện & Tuân thủ Pháp lý")
-            st.caption("Đánh giá toàn diện theo bộ ba an toàn thông tin (CIA Triad), chỉ số RTO/RPO và Nghị định 13/2023/NĐ-CP:")
+            st.caption("Đánh giá theo bộ ba an toàn thông tin (CIA Triad), vận hành và Nghị định 13/2023/NĐ-CP dựa trên dữ liệu thực tế:")
 
+            impact_data = _extract_grounded_impact(state)
             col_c1, col_c2, col_c3 = st.columns(3)
             with col_c1:
                 st.markdown(
-                    """
+                    f"""
                     <div style="background: rgba(225, 29, 72, 0.1); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 8px; padding: 14px; height: 100%;">
                         <div style="color: #fb7185; font-weight: 700; font-size: 0.95rem;">🔒 Tính Bảo mật (Confidentiality)</div>
                         <div style="color: #fecdd3; font-size: 0.85rem; margin-top: 6px; line-height: 1.5;">
-                            <strong style="color: #fda4af;">Mức độ ảnh hưởng: CAO</strong><br>
-                            Kẻ tấn công thiết lập kênh điều khiển C2 ra ngoài Internet và có khả năng trích xuất token/mật khẩu trong RAM.
+                            <strong style="color: #fda4af;">Mức độ ảnh hưởng: {html.escape(impact_data['c_level'])}</strong><br>
+                            {html.escape(impact_data['c_text'])}
                         </div>
                     </div>
                     """,
@@ -1163,12 +1641,12 @@ def main():
                 )
             with col_c2:
                 st.markdown(
-                    """
+                    f"""
                     <div style="background: rgba(217, 119, 6, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 14px; height: 100%;">
                         <div style="color: #fbbf24; font-weight: 700; font-size: 0.95rem;">🧩 Tính Toàn vẹn (Integrity)</div>
                         <div style="color: #fde68a; font-size: 0.85rem; margin-top: 6px; line-height: 1.5;">
-                            <strong style="color: #fcd34d;">Mức độ ảnh hưởng: TRUNG BÌNH</strong><br>
-                            Mã độc tạo tệp nhị phân trong thư mục Temp và đăng ký Scheduled Task tự chạy; dữ liệu nghiệp vụ chính không bị sửa đổi.
+                            <strong style="color: #fcd34d;">Mức độ ảnh hưởng: {html.escape(impact_data['i_level'])}</strong><br>
+                            {html.escape(impact_data['i_text'])}
                         </div>
                     </div>
                     """,
@@ -1176,12 +1654,12 @@ def main():
                 )
             with col_c3:
                 st.markdown(
-                    """
+                    f"""
                     <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 14px; height: 100%;">
                         <div style="color: #38bdf8; font-weight: 700; font-size: 0.95rem;">⚡ Tính Sẵn sàng (Availability)</div>
                         <div style="color: #bae6fd; font-size: 0.85rem; margin-top: 6px; line-height: 1.5;">
-                            <strong style="color: #7dd3fc;">Mức độ ảnh hưởng: CAO</strong><br>
-                            Máy trạm bị cô lập logic khỏi mạng nội bộ để xử lý; thời gian khôi phục nằm trong ngưỡng RTO cam kết.
+                            <strong style="color: #7dd3fc;">Mức độ ảnh hưởng: {html.escape(impact_data['a_level'])}</strong><br>
+                            {html.escape(impact_data['a_text'])}
                         </div>
                     </div>
                     """,
@@ -1190,12 +1668,13 @@ def main():
 
             st.write("")
             st.markdown(
-                """
+                f"""
                 <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px;">
-                    <strong style="color: #f1f5f9; font-size: 0.95rem;">📜 Nghĩa vụ Tuân thủ & Báo cáo Pháp lý (Nghị định 13/2023/NĐ-CP):</strong>
+                    <strong style="color: #f1f5f9; font-size: 0.95rem;">📜 Tuân thủ Pháp lý & Tác động Vận hành (Nghị định 13/2023/NĐ-CP):</strong>
                     <div style="color: #cbd5e1; font-size: 0.85rem; margin-top: 6px; line-height: 1.6;">
-                        • <strong>Nghị định 13/2023/NĐ-CP (Bảo vệ dữ liệu cá nhân):</strong> Khi có dấu hiệu rò rỉ dữ liệu cá nhân (PII), tổ chức có nghĩa vụ lập hồ sơ thông báo sự cố theo <strong>Mẫu số 03</strong> gửi <strong>Cục An ninh mạng và phòng, chống tội phạm sử dụng công nghệ cao (A05) - Bộ Công an</strong> trong thời hạn chậm nhất <strong>72 giờ</strong>.<br>
-                        • <strong>Luật An ninh mạng 2018:</strong> Báo cáo điều phối kỹ thuật với <strong>VNCERT/CC</strong> đối với sự cố tấn công mạng có nguy cơ lan rộng.
+                        • <strong>Đánh giá Nghị định 13/2023/NĐ-CP:</strong> {html.escape(impact_data['compliance_note'])}<br>
+                        • <strong>Tài chính / Thiệt hại trực tiếp:</strong> {html.escape(impact_data['financial_note'])}<br>
+                        • <strong>SLA Vận hành:</strong> {html.escape(impact_data['sla_note'])}
                     </div>
                 </div>
                 """,
@@ -1204,15 +1683,25 @@ def main():
 
         with tab_rca5:
             st.markdown("### 🛡️ Cổng Kiểm định An toàn trước khi Khôi phục (Integrity Gate)")
-            st.caption("Checklist tiêu chuẩn nghiệm thu kỹ thuật trước khi đưa máy chủ/máy trạm hoạt động trở lại:")
+            st.caption("Trạng thái kiểm định kỹ thuật thực tế dựa trên tiến độ điều tra và phê duyệt HITL:")
 
-            st.checkbox("✅ Xác thực Mã độc: Đã quét toàn bộ hệ thống bằng EDR/Antivirus, xác nhận 0 mã độc và backdoor tồn dư.", value=True, key="ig_gate_1")
-            st.checkbox("✅ Toàn vẹn Hệ thống: Đã kiểm tra tính toàn vẹn các file hệ thống và khóa Registry, không còn persistence.", value=True, key="ig_gate_2")
-            st.checkbox("✅ Đổi thông tin xác thực: Đã thu hồi toàn bộ Active Session và ép buộc đổi mật khẩu các tài khoản liên quan.", value=True, key="ig_gate_3")
-            st.checkbox("✅ Cập nhật Chính sách Bảo mật: Đã đưa IP/Domain máy chủ C2 vào Blacklist của Firewall/WAF biên.", value=True, key="ig_gate_4")
-            st.checkbox("✅ Kích hoạt Giám sát Tăng cường (Burn-in 72h): Thiết lập phân tích viên giám sát chặt chẽ lưu lượng Egress.", value=True, key="ig_gate_5")
+            gate_items = _extract_grounded_verification_gate(state)
+            for idx, item in enumerate(gate_items):
+                icon = "✅" if item["checked"] else "⏳"
+                label_txt = f"{icon} {item['label']}"
+                if item.get("detail"):
+                    label_txt += f" — {item['detail']}"
+                st.checkbox(
+                    label_txt,
+                    value=bool(item["checked"]),
+                    disabled=True,
+                    key=f"ig_gate_{state.incident_id}_{idx}",
+                )
 
-            st.success("🟢 HỆ THỐNG ĐÃ ĐẠT TIÊU CHUẨN KIỂM ĐỊNH AN TOÀN GO-LIVE")
+            if gate_items and all(item["checked"] for item in gate_items):
+                st.success("🟢 ĐÃ ĐẠT TẤT CẢ CÁC CỔNG KIỂM ĐỊNH AN TOÀN")
+            else:
+                st.warning("🟡 CHƯA ĐẠT ĐỦ TIÊU CHUẨN GO-LIVE — Vui lòng hoàn tất các bước kiểm định còn thiếu bên trên.")
 
     # =============================================================
     # 3. VIEW: 🛡️ BẰNG CHỨNG & LOG WAZUH SIEM (EVIDENCE & RAW LOGS EXPANDER)
@@ -1286,6 +1775,9 @@ def main():
                 render_hitech_agent_workflow(state, height=740)
 
             st.divider()
+            render_llm_telemetry_panel(state)
+
+            st.divider()
             st.subheader("📜 Nhật ký Chuyển dịch Trạng thái (State Transition History)")
             if state.history:
                 history_rows = []
@@ -1310,7 +1802,7 @@ def main():
             current_user_role = st.session_state.get("user_role", ROLE_SOC_ANALYST)
             render_hitl_action_cards(state, user_role=current_user_role)
             st.divider()
-            col_act1, col_act2 = st.columns([1, 2])
+            col_act1, col_act2 = st.columns([1, 1.4])
             with col_act1:
                 if st.button(
                     "⚡ Thực thi Hành động đã Duyệt & Tiến hành Báo cáo",
@@ -1331,6 +1823,43 @@ def main():
                         st.session_state.current_node = None
                         persist_incident_state(final_state)
                         st.success("Đã hoàn tất thực thi các hành động và xuất bản Báo cáo Điều tra Toàn diện!")
+                        st.rerun()
+
+            with col_act2:
+                feedback_loop_note = st.text_input(
+                    "Ghi chú yêu cầu AI điều chỉnh / tái điều tra:",
+                    placeholder="Ví dụ: Không cô lập Domain Controller, phân tích lại nguyên nhân gốc...",
+                    key="hitl_feedback_loop_note",
+                )
+                if st.button(
+                    "🔁 Yêu cầu AI Lập lại Kế hoạch / Tái điều tra (Feedback Loop)",
+                    use_container_width=True,
+                    key="btn_hitl_feedback_loop",
+                    help="Từ chối phương án hiện tại và kích hoạt Feedback Loop quay lui trong StateGraph",
+                ):
+                    with st.spinner("🔁 Đang gửi phản hồi chuyên viên để AI lập lại kế hoạch / tái điều tra..."):
+                        orch = st.session_state.orchestrator
+                        state.analyst_approved = False
+                        state.analyst_feedback = (
+                            (feedback_loop_note or "").strip()
+                            or f"Chuyên viên ({current_user_role}) yêu cầu AI lập lại kế hoạch / tái điều tra"
+                        )
+                        final_state = _call_resume_from_interrupt(
+                            orch=orch,
+                            state=state,
+                            allow_feedback_loop=True,
+                        )
+                        st.session_state.incident_state = final_state
+                        persist_incident_state(final_state)
+                        if final_state.status == IncidentStatus.AWAITING_APPROVAL:
+                            st.session_state.current_node = "hitl_approval"
+                            st.info(
+                                f"🔁 AI đã lập lại kế hoạch phản ứng mới (Lần quay lui #{getattr(final_state, 'reanalysis_count', 0)}). "
+                                "Vui lòng thẩm định các hành động mới bên trên."
+                            )
+                        else:
+                            st.session_state.current_node = None
+                            st.success("Đã hoàn tất chu trình điều tra sau phản hồi chuyên viên!")
                         st.rerun()
 
     # =============================================================
@@ -1541,16 +2070,34 @@ def main():
 
             ioc_cnt = len(getattr(state.threat_intel, "extracted_iocs", [])) if state.threat_intel else 0
 
+            cached_copilot_health = st.session_state.get("llm_health_status")
+            if cached_copilot_health is None and provider_obj is not None:
+                cached_copilot_health = getattr(provider_obj, "_last_health_status", None)
+
+            health_info = render_llm_health_badge(
+                provider_obj,
+                health=cached_copilot_health,
+                key_prefix="copilot_status",
+                probe=False,
+            )
+            if st.button("🔌 Kiểm tra LLM", key="copilot_btn_check_llm", use_container_width=True):
+                st.session_state.llm_health_status = _refresh_llm_health_status(provider_obj)
+                st.rerun()
+
+            active_gateway_display = str(health_info.get("active_provider") or provider_name).upper()
+            active_model_display = str(health_info.get("model") or active_model)
+            badge_display = str(health_info.get("badge") or "🔴 Offline")
+
             st.markdown(
                 f"""
                 <div style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span style="font-weight: 700; color: #38bdf8; font-size: 0.85rem; text-transform: uppercase;">Trạng thái Trợ lý SOC</span>
-                        <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;">🟢 Online</span>
+                        <span style="font-weight: 700; color: #38bdf8; font-size: 0.85rem; text-transform: uppercase;">Bối cảnh Trợ lý SOC</span>
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #cbd5e1;">{html.escape(badge_display)}</span>
                     </div>
                     <div style="margin-top: 8px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
-                        • <strong>Gateway:</strong> <code style="color: #38bdf8;">{html.escape(str(provider_name.upper()))}</code><br/>
-                        • <strong>Model:</strong> <code style="color: #38bdf8;">{html.escape(str(active_model))}</code><br/>
+                        • <strong>Gateway:</strong> <code style="color: #38bdf8;">{html.escape(active_gateway_display)}</code><br/>
+                        • <strong>Model:</strong> <code style="color: #38bdf8;">{html.escape(active_model_display)}</code><br/>
                         • <strong>Sự cố:</strong> <code style="color: #cbd5e1;">{html.escape(str(state.incident_id))}</code><br/>
                         • <strong>Mức độ:</strong> <code style="color: #fbbf24;">{html.escape(str(sev_label))}</code>
                     </div>
@@ -1559,19 +2106,29 @@ def main():
                 unsafe_allow_html=True,
             )
 
-            last_err = getattr(provider_obj, "last_error", None)
-            if provider_name.lower() == "deterministic" and last_err:
-                st.warning(f"⚠️ **Đang dùng Fallback Deterministic CoT** do API lỗi: `{last_err}`")
+            last_err = health_info.get("error") or getattr(provider_obj, "last_error", None)
+            if not health_info.get("connected") and last_err:
+                st.warning(f"⚠️ **Đang dùng Fallback / Gateway chưa kết nối:** `{last_err}`")
 
             with st.expander("⚙️ Cấu hình AI Gateway & Model", expanded=False):
+                mode_options = ["auto", "omnirouter", "openrouter", "ollama", "deterministic"]
+                curr_gw_mode = str(getattr(provider_obj, "provider_mode", get_llm_provider_mode()) or "auto").lower()
+                if curr_gw_mode not in mode_options:
+                    mode_options.append(curr_gw_mode)
+                cfg_mode = st.selectbox(
+                    "Chế độ Provider",
+                    options=mode_options,
+                    index=mode_options.index(curr_gw_mode),
+                    key="copilot_cfg_mode",
+                )
                 cfg_endpoint = st.text_input(
                     "API Endpoint",
-                    value=getattr(provider_obj, "endpoint", "http://localhost:20128/v1/chat/completions"),
+                    value=getattr(provider_obj, "endpoint", get_omnirouter_endpoint(provider_mode=curr_gw_mode)),
                     key="copilot_cfg_endpoint"
                 )
                 cfg_model = st.text_input(
                     "Tên Model / Combo Provider",
-                    value=getattr(provider_obj, "model", "AICODE"),
+                    value=getattr(provider_obj, "model", get_llm_model()),
                     key="copilot_cfg_model"
                 )
                 cfg_key = st.text_input(
@@ -1581,11 +2138,44 @@ def main():
                     key="copilot_cfg_key"
                 )
                 if st.button("💾 Lưu & Áp dụng Cấu hình", use_container_width=True):
-                    if provider_obj:
-                        provider_obj.endpoint = cfg_endpoint
-                        provider_obj.model = cfg_model
-                        provider_obj.api_key = cfg_key
-                    st.success("Đã cập nhật cấu hình Trợ lý SOC thành công!")
+                    target_provider = st.session_state.get("llm_provider") or provider_obj
+                    if target_provider is not None:
+                        if hasattr(target_provider, "update_config") and callable(target_provider.update_config):
+                            target_provider.update_config(
+                                api_key=cfg_key,
+                                endpoint=cfg_endpoint,
+                                model=cfg_model,
+                                provider_mode=cfg_mode,
+                            )
+                        elif hasattr(target_provider, "reconfigure") and callable(target_provider.reconfigure):
+                            target_provider.reconfigure(
+                                api_key=cfg_key,
+                                endpoint=cfg_endpoint,
+                                model=cfg_model,
+                                provider_mode=cfg_mode,
+                            )
+                        else:
+                            target_provider.endpoint = cfg_endpoint
+                            target_provider.model = cfg_model
+                            target_provider.api_key = cfg_key
+                            if hasattr(target_provider, "provider_mode"):
+                                target_provider.provider_mode = cfg_mode
+
+                    if hasattr(copilot_engine, "update_llm_config") and callable(copilot_engine.update_llm_config):
+                        copilot_engine.update_llm_config(
+                            api_key=cfg_key,
+                            endpoint=cfg_endpoint,
+                            model=cfg_model,
+                            provider_mode=cfg_mode,
+                        )
+                    elif target_provider is not None and hasattr(copilot_engine, "provider"):
+                        copilot_engine.provider = target_provider
+
+                    st.session_state.llm_provider = target_provider
+                    if "orchestrator" in st.session_state and hasattr(st.session_state.orchestrator, "set_llm_provider"):
+                        st.session_state.orchestrator.set_llm_provider(target_provider)
+                    st.session_state.llm_health_status = _refresh_llm_health_status(target_provider)
+                    st.success("Đã cập nhật và đồng bộ cấu hình AI Gateway sang Copilot & toàn bộ Pipeline!")
                     st.rerun()
 
             with st.expander("📌 Bối cảnh Sự cố Đang Tải", expanded=True):
@@ -1593,6 +2183,12 @@ def main():
                 st.markdown(f"**Trạng thái:** `{state.status.value}`")
                 if state.rca_result:
                     st.caption(f"🧬 **Root Cause:** {state.rca_result.root_cause_summary[:160]}...")
+                strategy_summary = getattr(state, "response_strategy_summary", None)
+                if strategy_summary:
+                    strategy_preview = str(strategy_summary).strip()
+                    if len(strategy_preview) > 220:
+                        strategy_preview = strategy_preview[:220] + "..."
+                    st.info(f"🧠 **Chiến lược Phản ứng:** {strategy_preview}")
                 st.markdown(f"**Số lượng IoC:** `{ioc_cnt}`")
                 approved_cnt = sum(1 for a in state.recommended_actions if a.is_approved is True)
                 st.markdown(f"**Hành động đã duyệt:** `{approved_cnt}/{len(state.recommended_actions)}`")
@@ -1607,7 +2203,31 @@ def main():
                 st.rerun()
 
         with col_chat:
-            # 1. Quick Action Prompt Chips
+            # 1. Quick Action Prompt Chips (với RBAC & Process Whitelist Guard cho nút Duyệt Toàn bộ)
+            current_user_role = st.session_state.get("user_role", ROLE_SOC_ANALYST)
+            rbac_batch_check = enforce_hitl_rbac(
+                current_user_role,
+                action_type="APPROVE_ALL",
+                actions=state.recommended_actions or [],
+            )
+            has_approve_all_perm = has_permission(current_user_role, "APPROVE_ALL")
+            has_protected_target = any(
+                is_protected_process(getattr(a, "target", None))
+                for a in (state.recommended_actions or [])
+                if extract_action_type_str(a) in {"KILL_PROCESS", "ISOLATE_HOST"}
+            )
+            approve_plan_disabled = (
+                (not has_approve_all_perm)
+                or (not rbac_batch_check.get("allowed", False))
+                or has_protected_target
+            )
+            if has_protected_target:
+                approve_plan_warning = "🛡️ Process Whitelist Guard: Danh sách hành động nhắm vào tiến trình hệ thống trọng yếu, bị chặn duyệt đồng loạt."
+            elif not has_approve_all_perm or not rbac_batch_check.get("allowed", False):
+                approve_plan_warning = f"🔒 Yêu cầu vai trò {ROLE_SOC_MANAGER} để sử dụng nút Duyệt Toàn bộ Kế hoạch Phản ứng."
+            else:
+                approve_plan_warning = "Phê duyệt toàn bộ kế hoạch phản ứng"
+
             st.markdown("##### ⚡ Gợi ý Lệnh Nhanh (1-Click Prompt):")
             chip1, chip2 = st.columns(2)
             chip3, chip4 = st.columns(2)
@@ -1623,8 +2243,16 @@ def main():
                 if st.button("📋 Tóm tắt Sự cố", use_container_width=True):
                     quick_prompt = "Tóm tắt sự cố này"
             with chip4:
-                if st.button("🛡️ Duyệt Toàn bộ Kế hoạch Phản ứng", use_container_width=True):
+                if st.button(
+                    "🛡️ Duyệt Toàn bộ Kế hoạch Phản ứng",
+                    use_container_width=True,
+                    disabled=approve_plan_disabled,
+                    help=approve_plan_warning,
+                ):
                     quick_prompt = "Duyệt tất cả các hành động phản ứng"
+
+            if approve_plan_disabled:
+                st.warning(approve_plan_warning)
 
             st.divider()
 
@@ -1637,7 +2265,10 @@ def main():
                         st.markdown(msg["content"])
                         if msg.get("action_card"):
                             card = msg["action_card"]
-                            st.info(f"⚡ **Lệnh can thiệp:** `{card.get('type')}` trên `{card.get('target')}` (Trạng thái: `{card.get('status')}`)")
+                            if card.get("status") == "RBAC_DENIED":
+                                st.error(f"⛔ **Bị từ chối bởi RBAC:** `{card.get('type')}` trên `{card.get('target')}` (Trạng thái: `{card.get('status')}`)")
+                            else:
+                                st.info(f"⚡ **Lệnh can thiệp:** `{card.get('type')}` trên `{card.get('target')}` (Trạng thái: `{card.get('status')}`)")
 
             # 3. Chat Input Box
             user_input = st.chat_input("Nhập câu hỏi hoặc chỉ đạo nghiệp vụ cho Trợ lý SOC...")
@@ -1649,32 +2280,51 @@ def main():
                 with st.chat_message("user", avatar="🛡️"):
                     st.markdown(prompt_to_process)
 
-                # Xử lý phản hồi qua Trợ lý SOC Engine
+                # Xử lý phản hồi qua Trợ lý SOC Engine (truyền user_role rõ ràng để cưỡng chế RBAC)
                 with st.chat_message("assistant", avatar="🤖"):
                     with st.spinner("🤖 Trợ lý SOC đang phân tích bối cảnh và suy luận..."):
-                        copilot_res = copilot_engine.process_message(
+                        copilot_res = _call_copilot_process_message(
+                            copilot_engine=copilot_engine,
                             user_message=prompt_to_process,
                             state=state,
                             chat_history=st.session_state.copilot_messages,
+                            user_role=current_user_role,
                         )
                         st.markdown(copilot_res.response_text)
 
-                        # Nếu có hành động can thiệp được thực thi
-                        if copilot_res.executed_action:
-                            act_info = copilot_res.executed_action
-                            st.success(f"✅ **Đã đồng bộ với StateGraph & Wazuh:** {act_info.get('message', '')}")
+                        # Kiểm tra kết quả thực thi & cờ chặn RBAC trước khi hiển thị st.success
+                        ea = copilot_res.executed_action
+                        is_denied = False
+                        if isinstance(ea, dict):
+                            is_denied = bool(
+                                ea.get("rbac_denied")
+                                or ea.get("blocked")
+                                or ea.get("type") == "RBAC_DENIED"
+                                or ea.get("status") == "RBAC_DENIED"
+                            )
+                            if is_denied:
+                                st.error(f"⛔ **Từ chối thực thi (RBAC / Guardrail):** {ea.get('message', 'Không đủ thẩm quyền thực thi hành động này.')}")
+                            else:
+                                st.success(f"✅ **Đã đồng bộ với StateGraph & Wazuh:** {ea.get('message', '')}")
+                        elif ea:
+                            st.success("✅ **Đã đồng bộ với StateGraph & Wazuh.**")
 
                         # Lưu phản hồi vào session
-                        assistant_msg = {
+                        assistant_msg: Dict[str, Any] = {
                             "role": "assistant",
                             "content": copilot_res.response_text,
                         }
-                        if copilot_res.executed_action:
+                        if isinstance(ea, dict):
                             intent_str = getattr(copilot_res.intent, "value", str(copilot_res.intent))
+                            card_status = (
+                                "RBAC_DENIED"
+                                if is_denied
+                                else ("APPROVED" if intent_str == "APPROVE_ACTION" else ("REJECTED" if intent_str == "REJECT_ACTION" else str(ea.get("status", "EXECUTED"))))
+                            )
                             assistant_msg["action_card"] = {
-                                "type": copilot_res.executed_action.get("action_type", "HITL"),
-                                "target": copilot_res.executed_action.get("target", "System"),
-                                "status": "APPROVED" if intent_str == "APPROVE_ACTION" else "REJECTED",
+                                "type": ea.get("action_type") or ea.get("type", "HITL"),
+                                "target": ea.get("target", "System"),
+                                "status": card_status,
                             }
                         st.session_state.copilot_messages.append(assistant_msg)
                         st.rerun()
@@ -1706,7 +2356,7 @@ def main():
                 with col_pub1:
                     if st.button("📝 Xuất bản & Lưu Báo cáo Ngay", type="primary", use_container_width=True):
                         with st.spinner("Reporting Agent đang tổng hợp thông tin và sinh báo cáo NIST SP 800-61..."):
-                            agent = ReportingAgent()
+                            agent = ReportingAgent(llm_provider=st.session_state.get("llm_provider"))
                             rep = agent.generate_report(state)
                             state.final_report = rep
                             st.session_state.incident_state = state
@@ -1874,7 +2524,7 @@ def main():
                     st.info("Sự cố này chưa có Báo cáo Điều tra Toàn diện.")
                     if st.button("📝 Sinh Báo cáo Ngay cho Sự cố Này", key=f"gen_rep_{selected_inc.incident_id}"):
                         with st.spinner("Đang sinh báo cáo NIST SP 800-61..."):
-                            agent = ReportingAgent()
+                            agent = ReportingAgent(llm_provider=st.session_state.get("llm_provider"))
                             rep = agent.generate_report(selected_inc)
                             selected_inc.final_report = rep
                             store.save_incident(selected_inc)

@@ -20,7 +20,13 @@ if _ROOT_DIR not in sys.path:
 
 from src.core.schemas import ParsedEvent, AttackCategory
 from src.tools.parsers import LogParserTool
-from src.tools.rag_knowledge_base import RAGKnowledgeBaseTool
+from src.tools.rag_knowledge_base import (
+    RAGKnowledgeBaseTool,
+    CORE_PROTECTED_MITRE_IDS,
+    CORE_PROTECTED_WAZUH_RULE_IDS,
+    MITRE_TACTIC_ID_MAP,
+    parse_otrf_knowledge_doc,
+)
 
 
 # Tập các EventID có độ nhạy an ninh cao trong điều tra số (Sysmon, Windows Security, System, PowerShell)
@@ -627,134 +633,11 @@ class PublicDatasetTrainer:
     @staticmethod
     def _parse_knowledge_doc_content(content: str, filename: str) -> Dict[str, Any]:
         """
-        Phân tích nội dung tài liệu tri thức (.yaml/.yml/.json/.md) trong data/knowledge_docs/.
-        Ưu tiên yaml.safe_load (nếu pyyaml có sẵn) hoặc json.loads, kết hợp Regex fallback chuẩn xác.
+        Phân tích nội dung tài liệu tri thức OTRF (.yaml/.yml/.json/.md) trong data/knowledge_docs/.
+        Trích xuất đầy đủ: id, title, platform, tags, description, mitre_techniques,
+        tactics, tools, adversary_commands, notebooks.
         """
-        ext = os.path.splitext(filename)[1].lower()
-        parsed_dict: Optional[Dict[str, Any]] = None
-
-        if ext == ".json":
-            try:
-                obj = json.loads(content)
-                if isinstance(obj, dict):
-                    parsed_dict = obj
-            except Exception:
-                pass
-        elif ext in (".yaml", ".yml"):
-            try:
-                import yaml  # type: ignore
-                obj = yaml.safe_load(content)
-                if isinstance(obj, dict):
-                    parsed_dict = obj
-            except Exception:
-                parsed_dict = None
-
-        if isinstance(parsed_dict, dict):
-            title = str(parsed_dict.get("title") or filename).strip()
-            doc_id = str(parsed_dict.get("id") or os.path.splitext(filename)[0]).strip()
-            desc = str(parsed_dict.get("description") or "").strip()
-            raw_mappings = parsed_dict.get("attack_mappings") or []
-            techniques: List[str] = []
-            tactics: List[str] = []
-            if isinstance(raw_mappings, list):
-                for m in raw_mappings:
-                    if not isinstance(m, dict):
-                        continue
-                    tech = str(m.get("technique") or "").strip()
-                    sub = m.get("sub-technique") or m.get("sub_technique")
-                    if tech:
-                        if sub and str(sub).strip() and str(sub).strip().lower() != "none" and "." not in tech:
-                            full_tid = f"{tech}.{str(sub).strip()}"
-                        else:
-                            full_tid = tech
-                        if full_tid not in techniques:
-                            techniques.append(full_tid)
-                    raw_tacs = m.get("tactics") or []
-                    if isinstance(raw_tacs, list):
-                        for t in raw_tacs:
-                            t_str = str(t).strip()
-                            mapped_tac = MITRE_TACTIC_ID_MAP.get(t_str.upper(), t_str)
-                            if mapped_tac and mapped_tac not in tactics:
-                                tactics.append(mapped_tac)
-            return {
-                "id": doc_id,
-                "title": title,
-                "description": desc,
-                "mitre_techniques": techniques,
-                "tactics": tactics,
-            }
-
-        # Regex fallback cho YAML / Markdown khi không cài đặt PyYAML
-        title_match = re.search(r"^title:\s*(.+)$", content, re.MULTILINE)
-        title = title_match.group(1).strip().strip("'\"") if title_match else os.path.splitext(filename)[0]
-
-        id_match = re.search(r"^id:\s*(.+)$", content, re.MULTILINE)
-        doc_id = id_match.group(1).strip().strip("'\"") if id_match else os.path.splitext(filename)[0]
-
-        # Trích xuất description (hỗ trợ cả inline và multiline block |-)
-        desc = ""
-        desc_block_match = re.search(
-            r"^description:\s*\|-?\s*\r?\n((?:[ \t]+.*\r?\n?)+)",
-            content,
-            re.MULTILINE,
-        )
-        if desc_block_match:
-            lines = [ln.strip() for ln in desc_block_match.group(1).splitlines() if ln.strip()]
-            desc = " ".join(lines)
-        else:
-            desc_inline = re.search(r"^description:\s*([^\r\n]+)$", content, re.MULTILINE)
-            if desc_inline:
-                desc = desc_inline.group(1).strip().strip("'\"")
-
-        if not desc:
-            desc = f"Tài liệu tri thức an ninh OTRF ({title})"
-
-        techniques = []
-        tactics = []
-
-        # Trích xuất khối attack_mappings
-        am_match = re.search(
-            r"^attack_mappings:\s*\r?\n((?:[ \t]+.*|\s*-\s+.*\r?\n?)+?)(?=^[a-zA-Z0-9_]+:|\Z)",
-            content,
-            re.MULTILINE,
-        )
-        am_block = am_match.group(1) if am_match else content
-
-        # Tìm các cặp technique + sub-technique
-        entry_chunks = re.split(r"(?m)^\s*-\s*technique:", am_block)
-        for idx, chunk in enumerate(entry_chunks):
-            if idx == 0 and "technique:" not in chunk:
-                continue
-            chunk_text = chunk if idx == 0 else f"technique:{chunk}"
-            t_match = re.search(r"technique:\s*['\"]?(T\d{4}(?:\.\d{3})?)['\"]?", chunk_text, re.IGNORECASE)
-            if t_match:
-                base_tech = t_match.group(1).upper()
-                sub_match = re.search(r"sub[-_]technique:\s*['\"]?(\d{3})['\"]?", chunk_text, re.IGNORECASE)
-                if sub_match and "." not in base_tech:
-                    full_tid = f"{base_tech}.{sub_match.group(1)}"
-                else:
-                    full_tid = base_tech
-                if full_tid not in techniques:
-                    techniques.append(full_tid)
-
-            for tac_id in re.findall(r"\b(TA\d{4})\b", chunk_text, re.IGNORECASE):
-                tac_upper = tac_id.upper()
-                mapped_tac = MITRE_TACTIC_ID_MAP.get(tac_upper, tac_upper)
-                if mapped_tac not in tactics:
-                    tactics.append(mapped_tac)
-
-        if not techniques:
-            for tid in re.findall(r"\b(T\d{4}(?:\.\d{3})?)\b", content):
-                if tid not in techniques:
-                    techniques.append(tid)
-
-        return {
-            "id": doc_id,
-            "title": title,
-            "description": desc,
-            "mitre_techniques": techniques,
-            "tactics": tactics or ["Discovery"],
-        }
+        return parse_otrf_knowledge_doc(content, filename)
 
     def ingest_knowledge_docs(
         self,
@@ -764,9 +647,8 @@ class PublicDatasetTrainer:
         """
         Đọc các file tài liệu .yaml / .yml / .json / .md trong data/knowledge_docs/
         (ví dụ các file đặc tả SDWIN-*.yaml, SDLIN-*.yaml, SDAWS-*.yaml của OTRF),
-        rút trích title, id, attack_mappings (technique, tactics), description, và
-        tự động bổ sung các kỹ thuật MITRE ATT&CK mới (nếu chưa có trong RAG) vào RAGKnowledgeBaseTool.
-        Không ghi đè lên các kỹ thuật cốt lõi đã có để bảo toàn 100% kết quả truy vấn top 1.
+        nạp toàn bộ 20 tài liệu vào collection `knowledge_docs` VÀ bổ sung các kỹ thuật
+        MITRE ATT&CK mới (ngoài `CORE_PROTECTED_MITRE_IDS`) vào `mitre_attack` qua batch upsert & flush.
         """
         target_docs_dir = docs_dir or self.knowledge_docs_dir
         kb = rag_kb or self.rag_kb or RAGKnowledgeBaseTool()
@@ -798,6 +680,11 @@ class PublicDatasetTrainer:
                     {
                         "id": parsed_doc["id"],
                         "title": parsed_doc["title"],
+                        "platform": parsed_doc.get("platform", "Windows"),
+                        "tags": parsed_doc.get("tags", []),
+                        "tools": parsed_doc.get("tools", []),
+                        "notebooks": parsed_doc.get("notebooks", []),
+                        "adversary_commands": parsed_doc.get("adversary_commands", "")[:400],
                         "source_file": fname,
                         "mitre_techniques": parsed_doc["mitre_techniques"],
                         "tactics": parsed_doc["tactics"],
@@ -805,13 +692,37 @@ class PublicDatasetTrainer:
                     }
                 )
 
+                # 1. Nạp đầy đủ tài liệu OTRF vào collection knowledge_docs (batch defer_save=True)
+                kb.add_knowledge_doc(
+                    doc_id=parsed_doc["id"],
+                    title=parsed_doc["title"],
+                    platform=parsed_doc.get("platforms") or parsed_doc.get("platform", "Windows"),
+                    tags=parsed_doc.get("tags", []),
+                    mitre_ids=parsed_doc["mitre_techniques"],
+                    tactics=parsed_doc["tactics"],
+                    description=parsed_doc["description"],
+                    adversary_commands=parsed_doc.get("adversary_commands", ""),
+                    tools=parsed_doc.get("tools", []),
+                    notebooks=parsed_doc.get("notebooks", []),
+                    source_file=fname,
+                    defer_save=True,
+                )
+
+                # 2. Bổ sung kỹ thuật MITRE mới (bảo vệ CORE_PROTECTED_MITRE_IDS)
                 tactic_str = ", ".join(parsed_doc["tactics"]) if parsed_doc["tactics"] else "Execution"
+                tools_str = ", ".join(parsed_doc.get("tools", [])) or "N/A"
                 for tech_id in parsed_doc["mitre_techniques"]:
                     tid_clean = str(tech_id).strip().upper()
                     if not tid_clean or tid_clean in CORE_PROTECTED_MITRE_IDS:
                         continue
-                    # Chỉ bổ sung nếu kỹ thuật chưa tồn tại trong RAG Knowledge Base
                     if kb.get_mitre_technique(tid_clean) is None:
+                        detection_text = (
+                            f"Monitor OTRF Security Dataset indicators ({parsed_doc['id']}, "
+                            f"Platform: {parsed_doc.get('platform', 'Windows')}, Tools: {tools_str}) "
+                            f"and SIEM telemetry for {parsed_doc['title']}."
+                        )
+                        if parsed_doc.get("adversary_commands"):
+                            detection_text += f" Sample adversary commands: {parsed_doc['adversary_commands'][:260]}"
                         kb.add_mitre_technique(
                             technique_id=tid_clean,
                             name=f"{parsed_doc['title']} ({parsed_doc['id']})",
@@ -821,14 +732,14 @@ class PublicDatasetTrainer:
                                 f"Apply least-privilege access controls, audit security telemetry "
                                 f"and enforce endpoint/cloud hardening for {tid_clean} ({parsed_doc['title']})."
                             ),
-                            detection=(
-                                f"Monitor OTRF Security Dataset indicators ({parsed_doc['id']}) "
-                                f"and SIEM telemetry for {parsed_doc['title']}."
-                            ),
+                            detection=detection_text,
+                            defer_save=True,
+                            protect_core=True,
                         )
             except Exception:
                 continue
 
+        kb.fallback_store.flush()
         return ingested_count
 
     def train_from_public_datasets(

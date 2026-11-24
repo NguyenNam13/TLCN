@@ -31,6 +31,13 @@ from src.core.hitl_manager import HITLManager, RollbackReason
 # =====================================================================
 # 1. KPI CARDS COMPONENT
 # =====================================================================
+def _telemetry_attr(item: Any, attr: str, default: Any = None) -> Any:
+    """Truy xuất an toàn thuộc tính trên LLMCallTelemetry hoặc dict."""
+    if isinstance(item, dict):
+        return item.get(attr, default)
+    return getattr(item, attr, default)
+
+
 def get_kpi_metrics(state: Optional[IncidentState]) -> Dict[str, Any]:
     """
     Trích xuất các chỉ số KPI cốt lõi từ IncidentState phục vụ hiển thị và kiểm thử logic.
@@ -54,6 +61,8 @@ def get_kpi_metrics(state: Optional[IncidentState]) -> Dict[str, Any]:
             "rejected_actions": 0,
             "attack_type": "Chưa xác định",
             "attack_category": "UNKNOWN",
+            "total_llm_tokens": 0,
+            "llm_calls_count": 0,
         }
 
     status_str = state.status.value if hasattr(state.status, "value") else str(state.status)
@@ -90,6 +99,27 @@ def get_kpi_metrics(state: Optional[IncidentState]) -> Dict[str, Any]:
         cat_val = state.triage_result.attack_category
         attack_category = cat_val.value if hasattr(cat_val, "value") else str(cat_val)
 
+    telemetry_items = getattr(state, "llm_telemetry", None) or []
+    exec_metrics = getattr(state, "execution_metrics", None) or {}
+    llm_metrics = getattr(state, "llm_metrics", None) or {}
+
+    if telemetry_items:
+        total_llm_tokens = 0
+        llm_calls_count = 0
+        for item in telemetry_items:
+            p_tok = int(_telemetry_attr(item, "prompt_tokens", 0) or 0)
+            c_tok = int(_telemetry_attr(item, "completion_tokens", 0) or 0)
+            tot_tok = int(_telemetry_attr(item, "total_tokens", 0) or 0)
+            if tot_tok == 0 and (p_tok > 0 or c_tok > 0):
+                tot_tok = p_tok + c_tok
+            total_llm_tokens += tot_tok
+            prov = str(_telemetry_attr(item, "provider_used", None) or _telemetry_attr(item, "provider", "") or "")
+            if prov != "skipped_tiered":
+                llm_calls_count += 1
+    else:
+        total_llm_tokens = int(exec_metrics.get("total_tokens", llm_metrics.get("total_tokens", 0)) or 0)
+        llm_calls_count = int(exec_metrics.get("llm_calls_count", llm_metrics.get("llm_calls_count", 0)) or 0)
+
     return {
         "incident_id": state.incident_id,
         "status": status_str,
@@ -105,6 +135,8 @@ def get_kpi_metrics(state: Optional[IncidentState]) -> Dict[str, Any]:
         "rejected_actions": rejected_actions,
         "attack_type": attack_type,
         "attack_category": attack_category,
+        "total_llm_tokens": total_llm_tokens,
+        "llm_calls_count": llm_calls_count,
     }
 
 
@@ -117,6 +149,10 @@ def render_attack_detection_banner(state: Optional[IncidentState]):
 
     # Trạng thái Standby / Chờ nhận cảnh báo từ Wazuh OVA
     if not state.raw_logs and state.status == IncidentStatus.NEW:
+        from src.core.config import get_wazuh_ova_ip, get_webhook_port
+
+        wazuh_ova_ip = get_wazuh_ova_ip()
+        webhook_port = get_webhook_port()
         banner_html = f"""
         <div style="
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -144,10 +180,10 @@ def render_attack_detection_banner(state: Optional[IncidentState]):
                 <div>
                     <div style="color: #94a3b8; font-size: 13px; margin-bottom: 4px;">Trạng thái Cổng Webhook:</div>
                     <div style="font-size: 19px; font-weight: 700; color: #34d399; line-height: 1.2;">
-                        🟢 Sẵn sàng nhận cảnh báo từ Wazuh OVA (:8000/api/v1/wazuh-alert)
+                        🟢 Sẵn sàng nhận cảnh báo từ Wazuh OVA (:{webhook_port}/api/v1/wazuh-alert)
                     </div>
                     <div style="color: #94a3b8; font-size: 13px; margin-top: 6px;">
-                        Chưa ghi nhận cảnh báo mới. Vui lòng bật máy chủ Wazuh OVA (172.16.65.150) hoặc chọn kịch bản mẫu từ menu bên trái để điều tra.
+                        Chưa ghi nhận cảnh báo mới. Vui lòng bật máy chủ Wazuh OVA ({html.escape(wazuh_ova_ip)}) hoặc chọn kịch bản mẫu từ menu bên trái để điều tra.
                     </div>
                 </div>
                 <div style="text-align: right;">
@@ -878,99 +914,32 @@ def render_process_tree(rca: Optional[RootCauseAnalysis]):
 
 
 # =====================================================================
-# 6. SIMPLE RBAC CONSTANTS & PROCESS WHITELIST GUARD HELPERS
+# 6. SIMPLE RBAC CONSTANTS & PROCESS WHITELIST GUARD HELPERS (DELEGATED TO CORE RBAC)
 # =====================================================================
-ROLE_SOC_ANALYST = "SOC Analyst (Tier 1/2)"
-ROLE_SOC_MANAGER = "SOC Manager (Incident Commander)"
-USER_ROLES = [ROLE_SOC_ANALYST, ROLE_SOC_MANAGER]
-
-DANGEROUS_ACTIONS = {
-    ActionType.ISOLATE_HOST,
-    ActionType.KILL_PROCESS,
-    "ISOLATE_HOST",
-    "KILL_PROCESS",
-}
-
-SYSTEM_CRITICAL_PROCESSES = {
-    "svchost.exe",
-    "lsass.exe",
-    "explorer.exe",
-    "csrss.exe",
-    "smss.exe",
-    "services.exe",
-    "wininit.exe",
-    "winlogon.exe",
-    "spoolsv.exe",
-    "system",
-}
-
-
-def is_dangerous_action(action: Any) -> bool:
-    """
-    Xác định hành động có thuộc danh mục rủi ro cao (nguy hiểm) hay không.
-    Hành động nguy hiểm gồm: ISOLATE_HOST (cô lập máy chủ) và KILL_PROCESS (diệt tiến trình).
-    """
-    if action is None:
-        return False
-    act_type = getattr(action, "action_type", action)
-    val = act_type.value if hasattr(act_type, "value") else str(act_type or "")
-    return str(val).upper() in {"ISOLATE_HOST", "KILL_PROCESS"}
-
-
-def is_critical_system_process(target: Optional[str]) -> bool:
-    """
-    Kiểm tra mục tiêu có phải là tiến trình hệ thống quan trọng cần bảo vệ (Process Whitelist Guard).
-    Bao gồm svchost.exe, lsass.exe, explorer.exe, csrss.exe, services.exe,...
-    """
-    if not target:
-        return False
-    target_clean = str(target).lower().strip()
-    norm_name = os.path.basename(target_clean.replace("\\", "/"))
-    if norm_name in SYSTEM_CRITICAL_PROCESSES:
-        return True
-    for proc in SYSTEM_CRITICAL_PROCESSES:
-        if proc in target_clean:
-            return True
-    return False
-
-
-def can_user_approve_action(user_role: Optional[str], action: Any) -> bool:
-    """
-    Kiểm tra quyền phê duyệt hành động theo cơ chế Simple RBAC:
-    - SOC Manager (Incident Commander): Toàn quyền phê duyệt mọi hành động.
-    - SOC Analyst (Tier 1/2): Chỉ được phê duyệt hành động rủi ro thấp/trung bình (BLOCK_IP, PATCH_SYSTEM,...).
-      Bị khóa phê duyệt đối với các hành động rủi ro cao (ISOLATE_HOST, KILL_PROCESS).
-    """
-    if not user_role:
-        return True
-    role_str = str(user_role).strip().lower()
-    if "manager" in role_str or "commander" in role_str:
-        return True
-    if is_dangerous_action(action):
-        return False
-    return True
-
-
-def get_action_rbac_warning(user_role: Optional[str], action: Any) -> Optional[str]:
-    """
-    Trả về cảnh báo nghiệp vụ nếu vai trò người dùng không đủ quyền phê duyệt hành động nguy hiểm.
-    """
-    if not can_user_approve_action(user_role, action):
-        return "⚠️ Yêu cầu vai trò SOC Manager để phê duyệt hành động có rủi ro cao (Cô lập máy / Diệt tiến trình)"
-    return None
-
-
-def get_whitelist_guard_warning(target: Optional[str]) -> Optional[str]:
-    """
-    Trả về cảnh báo trực quan Process Whitelist Guard nếu mục tiêu là tiến trình hệ thống quan trọng.
-    """
-    if is_critical_system_process(target):
-        return (
-            f"🛡️ Process Whitelist Guard: Cảnh báo: Mục tiêu '{target}' là tiến trình hệ thống quan trọng "
-            "(như svchost.exe, lsass.exe, explorer.exe). "
-            "Can thiệp hoặc diệt tiến trình này có thể gây mất ổn định hoặc sập hệ điều hành (BSOD / System Crash)!"
-        )
-    return None
+from src.core.rbac import (
+    ROLE_SOC_ANALYST,
+    ROLE_TIER1,
+    ROLE_SOC_MANAGER,
+    USER_ROLES,
+    HIGH_RISK_ACTION_TYPES,
+    LOW_MEDIUM_ACTION_TYPES,
+    DANGEROUS_ACTIONS,
+    PROTECTED_PROCESSES,
+    SYSTEM_CRITICAL_PROCESSES,
+    PERMISSION_MATRIX,
+    normalize_role,
+    extract_action_type_str,
+    is_dangerous_action,
+    is_protected_process,
+    is_critical_system_process,
+    has_permission,
+    can_user_approve_action,
+    check_action_permission,
+    get_action_rbac_warning,
+    get_whitelist_guard_warning,
+    build_rbac_denied_payload,
+    enforce_hitl_rbac,
+)
 
 
 # =====================================================================
@@ -987,7 +956,7 @@ def apply_hitl_action_decision(
 ) -> IncidentState:
     """
     Xử lý cập nhật quyết định của chuyên viên SOC cho từng hành động hoặc chỉnh sửa tham số.
-    Tích hợp Simple RBAC: kiểm tra vai trò người dùng trước khi phê duyệt hành động nguy hiểm.
+    Tích hợp Simple RBAC & Process Whitelist Guard: kiểm tra vai trò người dùng và bảo vệ tiến trình trọng yếu.
 
     :param state: IncidentState.
     :param action_idx: Chỉ số hành động trong state.recommended_actions.
@@ -1012,7 +981,13 @@ def apply_hitl_action_decision(
 
     decision_norm = decision.upper()
     if decision_norm == "APPROVE":
-        if user_role is not None and not can_user_approve_action(user_role, action):
+        is_protected_kill = (
+            extract_action_type_str(action) == "KILL_PROCESS"
+            and is_protected_process(action.target)
+        )
+        if is_protected_kill:
+            action.is_approved = None
+        elif user_role is not None and not can_user_approve_action(user_role, action):
             # Không đủ thẩm quyền phê duyệt hành động rủi ro cao
             action.is_approved = None
         else:
@@ -1023,6 +998,34 @@ def apply_hitl_action_decision(
         action.is_approved = None
 
     return state
+
+
+def render_response_strategy_callout(state: Optional[IncidentState]) -> Optional[str]:
+    """
+    Hiển thị hộp callout Chiến lược Phản ứng Tổng hợp (RAG + LLM Incident Commander Rationale)
+    nếu state.response_strategy_summary có dữ liệu, đảm bảo HTML-escape chống XSS.
+    """
+    summary = getattr(state, "response_strategy_summary", None) if state is not None else None
+    if not summary or not str(summary).strip():
+        return None
+
+    safe_summary = html.escape(str(summary).strip()).replace("\n", "<br/>")
+    callout_html = (
+        f'<div data-testid="response_strategy_callout" '
+        f'style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, #0f172a 100%); '
+        f'border: 1px solid rgba(56, 189, 248, 0.45); border-left: 5px solid #38bdf8; '
+        f'border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;">'
+        f'<div style="color: #38bdf8; font-weight: 800; font-size: 0.88rem; margin-bottom: 6px;">'
+        f'🧠 Chiến lược Phản ứng Tổng hợp (RAG + LLM Incident Commander Rationale)'
+        f'</div>'
+        f'<div style="color: #e2e8f0; font-size: 0.86rem; line-height: 1.55;">{safe_summary}</div>'
+        f'</div>'
+    )
+    try:
+        st.markdown(callout_html, unsafe_allow_html=True)
+    except Exception:
+        pass
+    return callout_html
 
 
 def render_hitl_action_cards(
@@ -1037,6 +1040,8 @@ def render_hitl_action_cards(
     """
     st.subheader("🛡️ Trung tâm Phê duyệt Chuyên viên (Interactive HITL Console)")
 
+    render_response_strategy_callout(state)
+
     if not state or not state.recommended_actions:
         st.info("Chưa có hành động phản ứng nào được đề xuất (Response Agent chưa chạy).")
         return
@@ -1048,7 +1053,7 @@ def render_hitl_action_cards(
         except Exception:
             user_role = ROLE_SOC_ANALYST
 
-    is_manager = "manager" in user_role.lower() or "commander" in user_role.lower()
+    is_manager = normalize_role(user_role) == ROLE_SOC_MANAGER
     role_border = "#38bdf8" if is_manager else "#f59e0b"
     role_color = "#38bdf8" if is_manager else "#fbbf24"
     role_desc = (
@@ -1091,17 +1096,26 @@ def render_hitl_action_cards(
 
     hitl_mgr = manager or HITLManager()
 
-    has_dangerous = any(is_dangerous_action(a) for a in state.recommended_actions)
-    can_approve_all = is_manager or not has_dangerous
+    rbac_batch = enforce_hitl_rbac(
+        user_role,
+        action_type="APPROVE_ALL",
+        actions=state.recommended_actions,
+    )
+    has_protected_kill = any(
+        extract_action_type_str(a) == "KILL_PROCESS" and is_protected_process(a.target)
+        for a in state.recommended_actions
+    )
+    can_approve_all = bool(rbac_batch.get("allowed", False)) and not has_protected_kill
 
     # Nút Duyệt tất cả / Từ chối tất cả / Hoàn tác tất cả nhanh
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1.5])
     with col_btn1:
-        tooltip_all = (
-            "Phê duyệt tất cả các hành động phản ứng"
-            if can_approve_all
-            else "⚠️ Yêu cầu vai trò SOC Manager để duyệt tất cả do danh sách có hành động rủi ro cao (Cô lập máy / Diệt tiến trình)"
-        )
+        if has_protected_kill:
+            tooltip_all = "🛡️ Process Whitelist Guard: Danh sách chứa hành động KILL_PROCESS nhắm vào tiến trình hệ thống trọng yếu."
+        elif can_approve_all:
+            tooltip_all = "Phê duyệt tất cả các hành động phản ứng"
+        else:
+            tooltip_all = "⚠️ Yêu cầu vai trò SOC Manager để duyệt tất cả do danh sách có hành động rủi ro cao (Cô lập máy / Diệt tiến trình)"
         if st.button("✅ Phê duyệt Tất cả", use_container_width=True, disabled=not can_approve_all, help=tooltip_all):
             for act in state.recommended_actions:
                 act.is_approved = True
@@ -1237,12 +1251,17 @@ def render_hitl_action_cards(
 
             col_a, col_b, col_c = st.columns([1, 1, 1])
             with col_a:
-                btn_disabled = not can_approve
-                btn_tooltip = (
-                    "⚠️ Yêu cầu vai trò SOC Manager để phê duyệt hành động có rủi ro cao (Cô lập máy / Diệt tiến trình)"
-                    if btn_disabled
-                    else f"Phê duyệt hành động #{idx+1}"
+                is_protected_kill = (
+                    extract_action_type_str(act) == "KILL_PROCESS"
+                    and is_protected_process(new_target)
                 )
+                btn_disabled = (not can_approve) or is_protected_kill
+                if is_protected_kill:
+                    btn_tooltip = "🛡️ Process Whitelist Guard: Chặn duyệt KILL_PROCESS trên tiến trình hệ thống trọng yếu!"
+                elif not can_approve:
+                    btn_tooltip = "⚠️ Yêu cầu vai trò SOC Manager để phê duyệt hành động có rủi ro cao (Cô lập máy / Diệt tiến trình)"
+                else:
+                    btn_tooltip = f"Phê duyệt hành động #{idx+1}"
                 if st.button(
                     f"✅ Duyệt #{idx+1}",
                     key=f"btn_approve_{idx}",
@@ -1332,7 +1351,378 @@ def render_hitl_action_cards(
 
 
 # =====================================================================
-# 7. HITECH 4-LANES ARCHITECTURE WORKFLOW DIAGRAM
+# 8. LLM GATEWAY HONEST HEALTH BADGE & TELEMETRY OBSERVABILITY COMPONENTS
+# =====================================================================
+def _extract_health_attr(obj: Any, attr: str, default: Any = None) -> Any:
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(attr, default)
+    return getattr(obj, attr, default)
+
+
+def render_llm_health_badge(
+    llm_provider: Any = None,
+    health: Any = None,
+    key_prefix: str = "llm",
+    probe: bool = True,
+) -> Dict[str, Any]:
+    """Kiểm tra trung thực trạng thái kết nối LLM Gateway và render badge hiển thị.
+
+    - Hỗ trợ cả Pydantic `LLMHealthStatus` lẫn dict mock và provider tối giản.
+    - Phân biệt rõ:
+      * `🟢 Live Cloud AI ({model} • {latency_ms}ms) [Online]` (omnirouter/openrouter)
+      * `🟢 Live Local Ollama ({model} • {latency_ms}ms) [Online]` (ollama)
+      * `🟡 Fallback: Deterministic CoT` (+ lý do lỗi ngắn gọn)
+      * `⚪ Chưa kiểm tra kết nối`
+      * `🔴 Offline`
+    - Không bao giờ hiển thị giả `Online` khi Gateway không thể kết nối.
+    """
+    connected = False
+    active_provider = "none"
+    configured_mode = "none"
+    model = "N/A"
+    endpoint = ""
+    latency_ms: Optional[float] = None
+    detail = ""
+    error: Optional[str] = None
+    using_dummy_key = False
+    enable_fallback = True
+    is_unverified = False
+
+    if llm_provider is not None:
+        enable_fallback = bool(getattr(llm_provider, "enable_fallback", True))
+        configured_mode = str(getattr(llm_provider, "provider_mode", "auto") or "auto")
+        model = str(getattr(llm_provider, "model", "default") or "default")
+        endpoint = str(getattr(llm_provider, "endpoint", "") or "")
+        active_provider = str(
+            getattr(llm_provider, "last_used_provider", None)
+            or getattr(llm_provider, "provider_type", "unknown")
+            or "unknown"
+        )
+        error = getattr(llm_provider, "last_error", None)
+
+    if health is not None:
+        explicit_status = str(_extract_health_attr(health, "status", "") or "").strip().lower()
+        explicit_checked = _extract_health_attr(health, "checked", None)
+        health_connected = bool(_extract_health_attr(health, "connected", False))
+        health_active = str(_extract_health_attr(health, "active_provider", active_provider) or active_provider)
+
+        if explicit_status in {"unverified", "unchecked", "not_checked"} or (
+            explicit_checked is False and not health_connected
+        ) or health_active.strip().lower() == "unverified":
+            is_unverified = True
+            connected = False
+            active_provider = "unverified"
+            detail = str(_extract_health_attr(health, "detail", "") or "Chưa kiểm tra kết nối LLM Gateway.")
+        else:
+            connected = health_connected
+            active_provider = health_active
+            configured_mode = str(_extract_health_attr(health, "configured_mode", configured_mode) or configured_mode)
+            model = str(_extract_health_attr(health, "model", model) or model)
+            endpoint = str(_extract_health_attr(health, "endpoint", endpoint) or endpoint)
+            latency_ms = _extract_health_attr(health, "latency_ms", None)
+            detail = str(_extract_health_attr(health, "detail", "") or "")
+            error = _extract_health_attr(health, "error", error)
+            using_dummy_key = bool(_extract_health_attr(health, "using_dummy_key", False))
+            if _extract_health_attr(health, "enable_fallback", None) is not None:
+                enable_fallback = bool(_extract_health_attr(health, "enable_fallback", True))
+            elif llm_provider is None and active_provider.strip().lower() == "none":
+                enable_fallback = False
+    elif llm_provider is None:
+        detail = "Chưa khởi tạo LLM Provider."
+        error = "provider_not_configured"
+    elif not probe:
+        is_unverified = True
+        connected = False
+        active_provider = "unverified"
+        detail = "Chưa kiểm tra kết nối tới LLM Gateway (bấm '🔌 Kiểm tra LLM')."
+    elif hasattr(llm_provider, "check_health") and callable(llm_provider.check_health):
+        try:
+            health_res = llm_provider.check_health()
+            connected = bool(_extract_health_attr(health_res, "connected", False))
+            active_provider = str(_extract_health_attr(health_res, "active_provider", active_provider) or active_provider)
+            configured_mode = str(_extract_health_attr(health_res, "configured_mode", configured_mode) or configured_mode)
+            model = str(_extract_health_attr(health_res, "model", model) or model)
+            endpoint = str(_extract_health_attr(health_res, "endpoint", endpoint) or endpoint)
+            latency_ms = _extract_health_attr(health_res, "latency_ms", None)
+            detail = str(_extract_health_attr(health_res, "detail", "") or "")
+            error = _extract_health_attr(health_res, "error", error)
+            using_dummy_key = bool(_extract_health_attr(health_res, "using_dummy_key", False))
+        except Exception as exc:
+            connected = False
+            error = str(exc)
+            detail = f"Kiểm tra kết nối thất bại: {exc}"
+    else:
+        connected = False
+        if active_provider.strip().lower() == "deterministic" or configured_mode.strip().lower() == "deterministic":
+            detail = "Chế độ Deterministic Fallback."
+        else:
+            is_unverified = True
+            active_provider = "unverified"
+            detail = "Provider không hỗ trợ kiểm tra health trực tiếp."
+
+    active_lower = active_provider.strip().lower()
+    mode_lower = configured_mode.strip().lower()
+    lat_part = f" • {latency_ms:.0f}ms" if isinstance(latency_ms, (int, float)) else ""
+
+    if connected and active_lower not in {"deterministic", "none", "offline", "unverified", ""}:
+        state_key = "online"
+        if active_lower == "ollama":
+            badge_text = f"🟢 Live Local Ollama ({model}{lat_part}) [Online]"
+        else:
+            badge_text = f"🟢 Live Cloud AI ({model}{lat_part}) [Online]"
+        badge_color = "#34d399"
+        badge_bg = "rgba(16, 185, 129, 0.2)"
+        badge_border = "rgba(52, 211, 153, 0.4)"
+    elif is_unverified:
+        state_key = "unverified"
+        badge_text = "⚪ Chưa kiểm tra kết nối"
+        badge_color = "#cbd5e1"
+        badge_bg = "rgba(148, 163, 184, 0.16)"
+        badge_border = "rgba(148, 163, 184, 0.4)"
+    elif (llm_provider is not None or health is not None) and (
+        enable_fallback or active_lower == "deterministic" or mode_lower == "deterministic"
+    ) and active_lower != "none":
+        state_key = "degraded"
+        short_err = str(error).strip().replace("\n", " ")[:60] if error else ""
+        badge_text = (
+            f"🟡 Fallback: Deterministic CoT ({short_err})"
+            if short_err
+            else "🟡 Fallback: Deterministic CoT"
+        )
+        badge_color = "#fbbf24"
+        badge_bg = "rgba(245, 158, 11, 0.18)"
+        badge_border = "rgba(245, 158, 11, 0.45)"
+    elif (llm_provider is not None and enable_fallback and active_lower == "none" and mode_lower == "deterministic"):
+        state_key = "degraded"
+        badge_text = "🟡 Fallback: Deterministic CoT"
+        badge_color = "#fbbf24"
+        badge_bg = "rgba(245, 158, 11, 0.18)"
+        badge_border = "rgba(245, 158, 11, 0.45)"
+    else:
+        state_key = "offline"
+        badge_text = "🔴 Offline"
+        badge_color = "#f87171"
+        badge_bg = "rgba(239, 68, 68, 0.18)"
+        badge_border = "rgba(239, 68, 68, 0.45)"
+
+    safe_badge = html.escape(badge_text)
+    safe_provider = html.escape(active_provider.upper())
+    safe_model = html.escape(model)
+    detail_text = detail or (str(error) if error else "")
+    if using_dummy_key:
+        dummy_note = "⚠️ API Key đang là giá trị mẫu/placeholder."
+        detail_text = f"{detail_text} • {dummy_note}".strip(" •")
+    safe_detail = html.escape(detail_text)
+
+    badge_html = (
+        f'<div data-testid="{html.escape(str(key_prefix))}_health_badge" '
+        f'style="display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">'
+        f'<span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; '
+        f'font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;">'
+        f'{safe_badge}</span>'
+        f'</div>'
+    )
+
+    panel_html = (
+        f'<div style="background: #0f172a; border: 1px solid #334155; border-radius: 10px; '
+        f'padding: 10px 14px; margin-bottom: 10px;">'
+        f'<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">'
+        f'<span style="font-weight: 700; color: #38bdf8; font-size: 0.82rem; text-transform: uppercase;">Trạng thái LLM Gateway</span>'
+        f'{badge_html}'
+        f'</div>'
+        f'<div style="margin-top: 6px; font-size: 0.78rem; color: #cbd5e1; line-height: 1.5;">'
+        f'• <strong>Provider:</strong> <code style="color: #38bdf8;">{safe_provider}</code> '
+        f'• <strong>Model:</strong> <code style="color: #38bdf8;">{safe_model}</code>'
+        + (f'<br/><span style="color: #94a3b8;">{safe_detail}</span>' if safe_detail else "")
+        + f'</div></div>'
+    )
+
+    try:
+        st.markdown(panel_html, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+    return {
+        "status": state_key,
+        "badge": badge_text,
+        "connected": connected,
+        "active_provider": active_provider,
+        "configured_mode": configured_mode,
+        "model": model,
+        "endpoint": endpoint,
+        "latency_ms": latency_ms,
+        "using_dummy_key": using_dummy_key,
+        "detail": detail,
+        "error": error,
+        "badge_html": badge_html,
+    }
+
+
+def format_llm_telemetry_data(state: Optional[IncidentState]) -> List[Dict[str, Any]]:
+    """
+    Định dạng danh sách `state.llm_telemetry` thành bảng dữ liệu chuẩn cho `st.dataframe`.
+    Hỗ trợ an toàn cả `LLMCallTelemetry` Pydantic object và dict.
+    """
+    if state is None:
+        return []
+    records = getattr(state, "llm_telemetry", None) or []
+    rows: List[Dict[str, Any]] = []
+    for item in records:
+        agent = str(_telemetry_attr(item, "agent_name", None) or _telemetry_attr(item, "agent", "Unknown") or "Unknown")
+        node = str(_telemetry_attr(item, "node", None) or "—")
+        provider = str(_telemetry_attr(item, "provider_used", None) or _telemetry_attr(item, "provider", "deterministic") or "deterministic")
+        model = str(_telemetry_attr(item, "model", None) or "N/A")
+        latency_ms = round(float(_telemetry_attr(item, "latency_ms", 0.0) or 0.0), 2)
+        p_tok = int(_telemetry_attr(item, "prompt_tokens", 0) or 0)
+        c_tok = int(_telemetry_attr(item, "completion_tokens", 0) or 0)
+        tot_tok = int(_telemetry_attr(item, "total_tokens", 0) or (p_tok + c_tok))
+        attempts = int(_telemetry_attr(item, "structured_attempts", 1) or 1)
+        self_corrected = bool(_telemetry_attr(item, "self_corrected", False) or attempts > 1)
+        fallback_reason = _telemetry_attr(item, "fallback_reason", None)
+
+        rows.append(
+            {
+                "Agent": agent,
+                "Node": node,
+                "Provider": provider,
+                "Model": model,
+                "Latency (ms)": latency_ms,
+                "Prompt/Completion Tokens": f"{p_tok} / {c_tok} ({tot_tok})",
+                "Self-Corrected": "✅ Có" if self_corrected else "Không",
+                "Fallback Reason": str(fallback_reason) if fallback_reason else "—",
+            }
+        )
+    return rows
+
+
+def render_llm_telemetry_panel(state: Optional[IncidentState]) -> Dict[str, Any]:
+    """
+    Hiển thị bảng tổng hợp hiệu năng điều phối StateGraph và Telemetry LLM
+    (Engine, Tổng Tokens, Số lượt gọi Live/Fallback/Tiered, Thời gian điều tra và DataFrame chi tiết).
+    """
+    exec_metrics = (getattr(state, "execution_metrics", None) or {}) if state is not None else {}
+    llm_metrics = (getattr(state, "llm_metrics", None) or {}) if state is not None else {}
+    wf_telemetry = (getattr(state, "workflow_telemetry", None) or {}) if state is not None else {}
+    telemetry_items = (getattr(state, "llm_telemetry", None) or []) if state is not None else []
+
+    raw_engine_mode = str(
+        exec_metrics.get("engine_mode")
+        or wf_telemetry.get("engine_mode")
+        or "standby"
+    )
+    mode_lower = raw_engine_mode.lower()
+    if "langgraph" in mode_lower:
+        engine_label = "LangGraph"
+    elif "fallback" in mode_lower:
+        engine_label = "Fallback Loop"
+    else:
+        engine_label = raw_engine_mode
+
+    if telemetry_items:
+        total_prompt = 0
+        total_completion = 0
+        total_tokens = 0
+        live_calls = 0
+        fallback_calls = 0
+        tiered_saved = 0
+        real_calls = 0
+        sum_llm_ms = 0.0
+
+        for item in telemetry_items:
+            prov = str(_telemetry_attr(item, "provider_used", None) or _telemetry_attr(item, "provider", "deterministic") or "deterministic").lower()
+            success = bool(_telemetry_attr(item, "success", True))
+            fb_reason = _telemetry_attr(item, "fallback_reason", None)
+            p_tok = int(_telemetry_attr(item, "prompt_tokens", 0) or 0)
+            c_tok = int(_telemetry_attr(item, "completion_tokens", 0) or 0)
+            tot_tok = int(_telemetry_attr(item, "total_tokens", 0) or 0)
+            if tot_tok == 0 and (p_tok > 0 or c_tok > 0):
+                tot_tok = p_tok + c_tok
+            lat = float(_telemetry_attr(item, "latency_ms", 0.0) or 0.0)
+
+            total_prompt += p_tok
+            total_completion += c_tok
+            total_tokens += tot_tok
+            sum_llm_ms += lat
+
+            if prov == "skipped_tiered":
+                tiered_saved += 1
+            else:
+                real_calls += 1
+                if prov not in {"deterministic", "skipped_tiered"} and success:
+                    live_calls += 1
+                if fb_reason is not None or prov == "deterministic":
+                    fallback_calls += 1
+    else:
+        total_prompt = int(exec_metrics.get("total_prompt_tokens", llm_metrics.get("total_prompt_tokens", 0)) or 0)
+        total_completion = int(exec_metrics.get("total_completion_tokens", llm_metrics.get("total_completion_tokens", 0)) or 0)
+        total_tokens = int(exec_metrics.get("total_tokens", llm_metrics.get("total_tokens", 0)) or 0)
+        real_calls = int(exec_metrics.get("llm_calls_count", llm_metrics.get("llm_calls_count", 0)) or 0)
+        live_calls = int(exec_metrics.get("live_llm_calls_count", llm_metrics.get("live_llm_calls_count", 0)) or 0)
+        fallback_calls = int(exec_metrics.get("fallback_calls_count", llm_metrics.get("fallback_calls_count", 0)) or 0)
+        tiered_saved = int(exec_metrics.get("tiered_saved_calls_count", llm_metrics.get("tiered_saved_calls_count", 0)) or 0)
+        sum_llm_ms = float(exec_metrics.get("total_llm_latency_ms", llm_metrics.get("total_llm_latency_ms", 0.0)) or 0.0)
+
+    node_latencies = exec_metrics.get("node_latencies_ms") or wf_telemetry.get("node_latencies_ms") or {}
+    total_investigation_ms = exec_metrics.get("total_pipeline_latency_ms") or wf_telemetry.get("total_pipeline_latency_ms")
+    if total_investigation_ms is None:
+        if isinstance(node_latencies, dict) and node_latencies:
+            total_investigation_ms = sum(float(v or 0.0) for v in node_latencies.values())
+        else:
+            total_investigation_ms = sum_llm_ms
+    total_investigation_ms = round(float(total_investigation_ms or 0.0), 2)
+
+    rows = format_llm_telemetry_data(state)
+    calls_breakdown = f"{live_calls} / {fallback_calls} / {tiered_saved}"
+
+    try:
+        st.subheader("📊 Giám sát Telemetry LLM & Hiệu năng StateGraph")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Orchestrator Engine", engine_label)
+        with col2:
+            st.metric(
+                "Tổng LLM Tokens",
+                f"{total_tokens:,}",
+                delta=f"P: {total_prompt:,} / C: {total_completion:,}" if total_tokens > 0 else None,
+                delta_color="off",
+            )
+        with col3:
+            st.metric(
+                "Lượt gọi AI (Live / Fallback / Tiết kiệm Tiered)",
+                calls_breakdown,
+                delta=f"Tổng thực thi: {real_calls} lượt",
+                delta_color="off",
+            )
+        with col4:
+            st.metric("Tổng thời gian điều tra (ms)", f"{total_investigation_ms:.1f} ms")
+
+        if rows:
+            st.dataframe(rows, use_container_width=True)
+        else:
+            st.info("Chưa ghi nhận bản ghi LLM Telemetry chi tiết nào trong phiên điều tra hiện tại.")
+    except Exception:
+        pass
+
+    return {
+        "engine_mode": engine_label,
+        "raw_engine_mode": raw_engine_mode,
+        "total_tokens": total_tokens,
+        "total_prompt_tokens": total_prompt,
+        "total_completion_tokens": total_completion,
+        "llm_calls_count": real_calls,
+        "live_llm_calls_count": live_calls,
+        "fallback_calls_count": fallback_calls,
+        "tiered_saved_calls_count": tiered_saved,
+        "total_investigation_ms": total_investigation_ms,
+        "calls_breakdown": calls_breakdown,
+        "rows": rows,
+    }
+
+
+# =====================================================================
+# 9. HITECH 4-LANES ARCHITECTURE WORKFLOW DIAGRAM
 # =====================================================================
 from src.ui.workflow_diagram import (
     get_hitech_workflow_html,

